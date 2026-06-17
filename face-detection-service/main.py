@@ -54,10 +54,14 @@ def normalize_landmarks(landmarks, image_width: int, image_height: int) -> List[
     for idx in FACE_OUTLINE_INDICES:
         if idx < len(landmarks):
             lm = landmarks[idx]
+            y_coord = float(lm.y)
+            # Shift forehead points up (points with y < 0.3 are at the top)
+            if y_coord < 0.35:
+                y_coord -= 0.05  # Move up by 5%
             facial_points.append({
                 "type": "outline",
                 "x": float(lm.x),
-                "y": float(lm.y)
+                "y": y_coord
             })
 
     # Left eyebrow
