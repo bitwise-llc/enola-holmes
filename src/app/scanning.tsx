@@ -1,39 +1,115 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, Image, Animated, Dimensions, Alert, Easing } from 'react-native';
+import { StyleSheet, View, Text, Image as RNImage, Animated, Dimensions, Alert, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { uploadAsync } from 'expo-file-system/legacy';
 import { getCoinBalance, recordSearchAndDeductCoin } from '@/utils/searchService';
+import { Canvas, Circle as SkiaCircle, Group } from '@shopify/react-native-skia';
+import { Image } from 'expo-image';
 
 const { width, height } = Dimensions.get('window');
 const FACECHECK_API_TOKEN = 'UFSWdOlDdSa5BCOV6U3OpIi28UIjIO4tkYmOUVYNN4s1h3EQ956npx43IcU6qfdqiNjSPL3gz7Y=';
 const FACECHECK_SITE = 'https://facecheck.id';
 const TESTING_MODE = true; // Set to false for real results (uses API credits)
 
-// Mock facial points for biometric overlay
-const facialPoints = [
-  { x: 0.3, y: 0.25 }, // Left eye
-  { x: 0.7, y: 0.25 }, // Right eye
-  { x: 0.5, y: 0.4 },  // Nose
-  { x: 0.35, y: 0.6 }, // Left mouth
-  { x: 0.65, y: 0.6 }, // Right mouth
-  { x: 0.5, y: 0.65 }, // Chin
-  { x: 0.2, y: 0.3 },  // Left eyebrow
-  { x: 0.8, y: 0.3 },  // Right eyebrow
-];
+// Face detection service URL
+// iOS Simulator: http://localhost:8000
+// Android Emulator: http://10.0.2.2:8000
+// Physical Device: http://YOUR_COMPUTER_IP:8000 (e.g., http://192.168.1.10:8000)
+const FACE_DETECTION_SERVICE_URL = 'http://localhost:8000';
 
 export default function ScanningScreen() {
   const { imageUri } = useLocalSearchParams<{ imageUri: string }>();
   const [searchStatus, setSearchStatus] = useState('Analyzing image...');
   const [actualProgress, setActualProgress] = useState(0);
+  const [facialPoints, setFacialPoints] = useState<Array<{ x: number; y: number; type: string }>>([]);
+  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
+  const [imageScale, setImageScale] = useState(1);
   const scanProgress = useRef(new Animated.Value(0)).current;
   const scanProgress2 = useRef(new Animated.Value(0)).current;
-  const pointsOpacity = useRef(facialPoints.map(() => new Animated.Value(0))).current;
+  const pointsOpacity = useRef<Animated.Value[]>([]);
   const glowPulse = useRef(new Animated.Value(0)).current;
   const progressValue = useRef(new Animated.Value(0)).current;
   const radialPulse = useRef(new Animated.Value(0)).current;
   const cornerScale = useRef(new Animated.Value(0)).current;
+
+  const detectFace = async () => {
+    try {
+      console.log('🔍 Detecting facial landmarks using MediaPipe service');
+      console.log('📷 Image URI:', imageUri);
+
+      console.log('📤 Sending image to face detection service...');
+
+      // Use expo-file-system uploadAsync for proper multipart upload in React Native
+      // uploadType: 1 = MULTIPART
+      const uploadResponse = await uploadAsync(
+        `${FACE_DETECTION_SERVICE_URL}/detect-face`,
+        imageUri,
+        {
+          httpMethod: 'POST',
+          uploadType: 1,
+          fieldName: 'file',
+          mimeType: imageUri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg',
+        }
+      );
+
+      if (uploadResponse.status !== 200) {
+        throw new Error(`Face detection service error: ${uploadResponse.status}`);
+      }
+
+      const detectionData = JSON.parse(uploadResponse.body);
+      console.log('✅ Face detection response:', detectionData);
+      console.log('📊 Sample points:', JSON.stringify(detectionData.facialPoints.slice(0, 5), null, 2));
+
+      if (detectionData.faceDetected && detectionData.facialPoints.length > 0) {
+        console.log('🎯 Face detected! Found', detectionData.totalLandmarks, 'landmarks');
+
+        // Use the real detected landmarks
+        setFacialPoints(detectionData.facialPoints);
+        pointsOpacity.current = detectionData.facialPoints.map(() => new Animated.Value(0));
+
+        console.log('✅ Real facial landmarks loaded');
+        console.log('📍 First 3 points:', detectionData.facialPoints.slice(0, 3));
+      } else {
+        console.log('⚠️ No face detected, using fallback points');
+
+        // Fallback to default points if no face detected
+        const fallbackPoints = [
+          { x: 0.35, y: 0.3, type: 'eye' },
+          { x: 0.65, y: 0.3, type: 'eye' },
+          { x: 0.5, y: 0.45, type: 'nose' },
+          { x: 0.41, y: 0.58, type: 'mouth' },
+          { x: 0.59, y: 0.58, type: 'mouth' },
+          { x: 0.5, y: 0.62, type: 'mouth' },
+          { x: 0.32, y: 0.25, type: 'eyebrow' },
+          { x: 0.68, y: 0.25, type: 'eyebrow' },
+        ];
+
+        setFacialPoints(fallbackPoints);
+        pointsOpacity.current = fallbackPoints.map(() => new Animated.Value(0));
+      }
+
+    } catch (error) {
+      console.error('❌ Face detection error:', error);
+
+      // Use fallback points on error
+      const fallbackPoints = [
+        { x: 0.35, y: 0.3, type: 'eye' },
+        { x: 0.65, y: 0.3, type: 'eye' },
+        { x: 0.5, y: 0.45, type: 'nose' },
+        { x: 0.41, y: 0.58, type: 'mouth' },
+        { x: 0.59, y: 0.58, type: 'mouth' },
+        { x: 0.5, y: 0.62, type: 'mouth' },
+        { x: 0.32, y: 0.25, type: 'eyebrow' },
+        { x: 0.68, y: 0.25, type: 'eyebrow' },
+      ];
+
+      setFacialPoints(fallbackPoints);
+      pointsOpacity.current = fallbackPoints.map(() => new Animated.Value(0));
+    }
+  };
 
   const searchByFace = async () => {
     try {
@@ -85,11 +161,17 @@ export default function ScanningScreen() {
         }
       );
 
-      const uploadData = JSON.parse(uploadResponse.body);
+      let uploadData;
+      try {
+        uploadData = JSON.parse(uploadResponse.body);
+      } catch (parseError) {
+        console.error('Failed to parse upload response:', uploadResponse.body);
+        throw new Error('Invalid response from server');
+      }
 
-      if (uploadData.error) {
+      if (uploadData?.error) {
         // Handle specific API errors with user-friendly messages
-        if (uploadData.code === 'IMAGE_ERROR') {
+        if (uploadData?.code === 'IMAGE_ERROR') {
           // Show user-friendly alert for no face detected
           Alert.alert(
             'No Face Detected',
@@ -108,7 +190,10 @@ export default function ScanningScreen() {
         throw new Error(uploadData.error);
       }
 
-      const id_search = uploadData.id_search;
+      const id_search = uploadData?.id_search;
+      if (!id_search) {
+        throw new Error('No search ID returned from server');
+      }
       console.log('Upload successful. id_search=' + id_search);
 
       setSearchStatus('Searching faces...');
@@ -138,11 +223,11 @@ export default function ScanningScreen() {
 
         const searchData = await searchResponse.json();
 
-        if (searchData.error) {
-          throw new Error(`${searchData.error} (${searchData.code})`);
+        if (searchData?.error) {
+          throw new Error(`${searchData.error} (${searchData.code || 'UNKNOWN'})`);
         }
 
-        if (searchData.output && searchData.output.items) {
+        if (searchData?.output?.items) {
           console.log(`Search complete! Found ${searchData.output.items.length} results`);
           setSearchStatus('Found matches!');
           setActualProgress(100);
@@ -174,9 +259,11 @@ export default function ScanningScreen() {
           return;
         }
 
-        console.log(`Progress: ${searchData.progress}% - ${searchData.message}`);
-        setSearchStatus(`Searching... ${searchData.progress}%`);
-        setActualProgress(prev => Math.max(prev, searchData.progress || 0));
+        // Round progress and ensure it only increases
+        const newProgress = Math.round(searchData.progress || 0);
+        console.log(`Progress: ${newProgress}% - ${searchData.message}`);
+        setSearchStatus(`Searching... ${newProgress}%`);
+        setActualProgress(prev => Math.max(prev, newProgress));
 
         // Wait 1 second before next poll
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -211,8 +298,52 @@ export default function ScanningScreen() {
   };
 
   useEffect(() => {
+    // Get actual image dimensions to calculate proper offset for facial points
+    RNImage.getSize(
+      imageUri,
+      (imgWidth, imgHeight) => {
+        const containerSize = width - 80;
+        const imageAspect = imgWidth / imgHeight;
+        const containerAspect = 1; // square container
+
+        let renderedWidth, renderedHeight, offsetX, offsetY;
+
+        if (imageAspect > containerAspect) {
+          // Image is wider - will have top/bottom letterboxing
+          renderedWidth = containerSize;
+          renderedHeight = containerSize / imageAspect;
+          offsetX = 0;
+          offsetY = (containerSize - renderedHeight) / 2;
+        } else {
+          // Image is taller - will have left/right pillarboxing
+          renderedWidth = containerSize * imageAspect;
+          renderedHeight = containerSize;
+          offsetX = (containerSize - renderedWidth) / 2;
+          offsetY = 0;
+        }
+
+        const scale = renderedWidth / imgWidth;
+
+        console.log('📐 Image dimensions:', { imgWidth, imgHeight });
+        console.log('📐 Rendered dimensions:', { renderedWidth, renderedHeight });
+        console.log('📐 Offset:', { offsetX, offsetY });
+        console.log('📐 Scale:', scale);
+
+        setImageDimensions({ width: renderedWidth, height: renderedHeight });
+        setImageOffset({ x: offsetX, y: offsetY });
+        setImageScale(scale);
+      },
+      (error) => {
+        console.error('Failed to get image dimensions:', error);
+      }
+    );
+
+    // Detect face first
+    detectFace();
+
     // Start the face search
     searchByFace();
+
     // Corner brackets scale in
     Animated.spring(cornerScale, {
       toValue: 1,
@@ -278,19 +409,32 @@ export default function ScanningScreen() {
       ])
     ).start();
 
-    // Staggered facial points animation - each point appears one by one
-    const pointAnimations = pointsOpacity.map((anim, index) =>
-      Animated.spring(anim, {
-        toValue: 1,
-        delay: 600 + index * 100,
-        tension: 80,
-        friction: 8,
-        useNativeDriver: true,
-      })
-    );
-
-    Animated.stagger(100, pointAnimations).start();
   }, []);
+
+  // Animate facial points when detected
+  useEffect(() => {
+    console.log('🎬 Facial points useEffect triggered');
+    console.log('📊 facialPoints.length:', facialPoints.length);
+    console.log('📊 pointsOpacity.current.length:', pointsOpacity.current.length);
+
+    if (facialPoints.length > 0 && pointsOpacity.current.length > 0) {
+      console.log('✨ Animating', pointsOpacity.current.length, 'facial points');
+      const pointAnimations = pointsOpacity.current.map((anim, index) =>
+        Animated.spring(anim, {
+          toValue: 1,
+          delay: 600 + index * 100,
+          tension: 80,
+          friction: 8,
+          useNativeDriver: true,
+        })
+      );
+
+      Animated.stagger(100, pointAnimations).start();
+      console.log('✅ Point animations started');
+    } else {
+      console.log('⚠️ Skipping animation - no points or opacity values');
+    }
+  }, [facialPoints]);
 
   // Animate progress bar when actualProgress changes
   useEffect(() => {
@@ -338,6 +482,18 @@ export default function ScanningScreen() {
 
   const imageSize = width - 80;
 
+  console.log('🎨 Rendering ScanningScreen');
+  console.log('📍 Current facialPoints:', facialPoints);
+  console.log('📊 facialPoints count:', facialPoints.length);
+  console.log('📐 imageSize (container):', imageSize);
+  console.log('📐 imageDimensions (actual):', imageDimensions);
+  console.log('📐 imageOffset:', imageOffset);
+  if (facialPoints.length > 0 && imageDimensions.width > 0) {
+    const x = facialPoints[0].x * imageDimensions.width + imageOffset.x;
+    const y = facialPoints[0].y * imageDimensions.height + imageOffset.y;
+    console.log('📍 Point 0 position: x=', x, 'y=', y);
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -367,7 +523,7 @@ export default function ScanningScreen() {
                 <Image
                   source={{ uri: imageUri }}
                   style={styles.image}
-                  resizeMode="cover"
+                  resizeMode="contain"
                 />
               )}
 
@@ -384,11 +540,34 @@ export default function ScanningScreen() {
                   ]}
                 />
 
-                {/* Corner Indicators */}
-                <Animated.View style={[styles.cornerTL, { transform: [{ scale: cornerScale }] }]} />
-                <Animated.View style={[styles.cornerTR, { transform: [{ scale: cornerScale }] }]} />
-                <Animated.View style={[styles.cornerBL, { transform: [{ scale: cornerScale }] }]} />
-                <Animated.View style={[styles.cornerBR, { transform: [{ scale: cornerScale }] }]} />
+                {/* Corner Indicators - Now showing facial points! */}
+                {imageDimensions.width > 0 && facialPoints.length >= 4 ? (
+                  <>
+                    <Animated.View style={[styles.facialDot, {
+                      left: facialPoints[0].x * imageDimensions.width + imageOffset.x - 10,
+                      top: facialPoints[0].y * imageDimensions.height + imageOffset.y - 10,
+                    }, { transform: [{ scale: cornerScale }] }]} />
+                    <Animated.View style={[styles.facialDot, {
+                      left: facialPoints[1].x * imageDimensions.width + imageOffset.x - 10,
+                      top: facialPoints[1].y * imageDimensions.height + imageOffset.y - 10,
+                    }, { transform: [{ scale: cornerScale }] }]} />
+                    <Animated.View style={[styles.facialDot, {
+                      left: facialPoints[2].x * imageDimensions.width + imageOffset.x - 10,
+                      top: facialPoints[2].y * imageDimensions.height + imageOffset.y - 10,
+                    }, { transform: [{ scale: cornerScale }] }]} />
+                    <Animated.View style={[styles.facialDot, {
+                      left: facialPoints[3].x * imageDimensions.width + imageOffset.x - 10,
+                      top: facialPoints[3].y * imageDimensions.height + imageOffset.y - 10,
+                    }, { transform: [{ scale: cornerScale }] }]} />
+                  </>
+                ) : (
+                  <>
+                    <Animated.View style={[styles.cornerTL, { transform: [{ scale: cornerScale }] }]} />
+                    <Animated.View style={[styles.cornerTR, { transform: [{ scale: cornerScale }] }]} />
+                    <Animated.View style={[styles.cornerBL, { transform: [{ scale: cornerScale }] }]} />
+                    <Animated.View style={[styles.cornerBR, { transform: [{ scale: cornerScale }] }]} />
+                  </>
+                )}
 
                 {/* Primary Scan Line */}
                 <Animated.View
@@ -426,32 +605,6 @@ export default function ScanningScreen() {
                   />
                 </Animated.View>
 
-                {/* Facial Points with individual animations */}
-                {facialPoints.map((point, index) => (
-                  <Animated.View
-                    key={index}
-                    style={[
-                      styles.facialPoint,
-                      {
-                        left: `${point.x * 100}%`,
-                        top: `${point.y * 100}%`,
-                        opacity: pointsOpacity[index],
-                        transform: [{ scale: pointsOpacity[index] }],
-                      },
-                    ]}
-                  >
-                    <View style={styles.pointOuter}>
-                      <View style={styles.pointInner} />
-                    </View>
-                  </Animated.View>
-                ))}
-
-                {/* Connection Lines - animate based on first and last points */}
-                <Animated.View style={[styles.connectionLines, { opacity: pointsOpacity[pointsOpacity.length - 1] }]}>
-                  <View style={[styles.connectionLine, { top: '25%', left: '30%', width: '40%', height: 2 }]} />
-                  <View style={[styles.connectionLine, { top: '40%', left: '49%', width: 2, height: '20%' }]} />
-                  <View style={[styles.connectionLine, { top: '60%', left: '35%', width: '30%', height: 2 }]} />
-                </Animated.View>
               </View>
 
               {/* Glow Effect */}
@@ -459,16 +612,31 @@ export default function ScanningScreen() {
             </View>
           </View>
 
+          {/* DEBUG: Show facial points data */}
+          {facialPoints.length > 0 && (
+            <View style={{ backgroundColor: 'rgba(255,0,0,0.9)', padding: 10, marginBottom: 10 }}>
+              <Text style={{ color: 'white', fontSize: 10 }}>
+                ✅ Facial points detected: {facialPoints.length} points
+              </Text>
+              <Text style={{ color: 'white', fontSize: 10 }}>
+                First point: x={facialPoints[0].x.toFixed(3)}, y={facialPoints[0].y.toFixed(3)}
+              </Text>
+              <Text style={{ color: 'white', fontSize: 10 }}>
+                Image dims: {imageDimensions.width.toFixed(0)} x {imageDimensions.height.toFixed(0)}
+              </Text>
+              <Text style={{ color: 'white', fontSize: 10 }}>
+                Offset: x={imageOffset.x.toFixed(0)}, y={imageOffset.y.toFixed(0)}
+              </Text>
+            </View>
+          )}
+
           {/* Progress Section */}
           <View style={styles.progressSection}>
             <View style={styles.progressHeader}>
               <Text style={styles.progressLabel}>Scanning Progress</Text>
-              <Animated.Text style={styles.progressPercent}>
-                {progressValue.interpolate({
-                  inputRange: [0, 100],
-                  outputRange: ['0%', '100%'],
-                })}
-              </Animated.Text>
+              <Text style={styles.progressPercent}>
+                {Math.round(actualProgress)}%
+              </Text>
             </View>
             <View style={styles.progressBarContainer}>
               <Animated.View
@@ -563,6 +731,8 @@ const styles = StyleSheet.create({
   imageContainer: {
     alignItems: 'center',
     marginBottom: 28,
+    width: width - 80,
+    height: width - 80,
   },
   imageCard: {
     width: width - 80,
@@ -618,6 +788,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderColor: '#0EA5E9',
     borderTopLeftRadius: 4,
+    zIndex: 9999,
   },
   cornerTR: {
     position: 'absolute',
@@ -629,17 +800,18 @@ const styles = StyleSheet.create({
     borderRightWidth: 3,
     borderColor: '#0EA5E9',
     borderTopRightRadius: 4,
+    zIndex: 9999,
   },
   cornerBL: {
     position: 'absolute',
     bottom: 16,
     left: 16,
-    width: 24,
-    height: 24,
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-    borderColor: '#0EA5E9',
-    borderBottomLeftRadius: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'red',
+    borderWidth: 3,
+    borderColor: 'yellow',
   },
   cornerBR: {
     position: 'absolute',
@@ -651,6 +823,15 @@ const styles = StyleSheet.create({
     borderRightWidth: 3,
     borderColor: '#0EA5E9',
     borderBottomRightRadius: 4,
+  },
+  facialDot: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'red',
+    borderWidth: 3,
+    borderColor: 'yellow',
   },
   scanLine: {
     position: 'absolute',
@@ -673,43 +854,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 20,
-  },
-  facialPoint: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    marginLeft: -10,
-    marginTop: -10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pointOuter: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: 'rgba(14, 165, 233, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#0EA5E9',
-  },
-  pointInner: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#0EA5E9',
-    shadowColor: '#0EA5E9',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-  },
-  connectionLines: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  connectionLine: {
-    position: 'absolute',
-    backgroundColor: '#0EA5E9',
-    opacity: 0.5,
   },
   progressSection: {
     backgroundColor: '#FFFFFF',

@@ -57,11 +57,20 @@ export async function recordSearchAndDeductCoin(
     };
   }
   try {
+    // Limit the results data to avoid "message too long" error
+    // Only keep essential fields and limit to first 10 results
+    const trimmedResults = resultsData.slice(0, 10).map(item => ({
+      url: item.url,
+      score: item.score,
+      title: item.title || '',
+      // Remove large fields like images, thumbnails, etc.
+    }));
+
     const { data, error } = await supabase.rpc('record_search_and_deduct_coin', {
       p_user_id: userId,
       p_image_url: imageUrl,
       p_results_count: resultsCount,
-      p_results_data: resultsData,
+      p_results_data: trimmedResults,
     });
 
     if (error) {

@@ -88,6 +88,24 @@ export default function HomeScreen() {
         <Text style={styles.title}>Welcome to Enola</Text>
         <Text style={styles.subtitle}>Your personal search assistant</Text>
 
+        {/* SIMPLE TEST - Blue box with colored dots */}
+        <View style={{
+          width: 300,
+          height: 300,
+          backgroundColor: '#E0E0E0',
+          marginVertical: 20,
+          position: 'relative',
+        }}>
+          {/* Test dots using absolute positioning */}
+          <View style={{ position: 'absolute', left: 50, top: 50, width: 20, height: 20, borderRadius: 10, backgroundColor: 'red' }} />
+          <View style={{ position: 'absolute', left: 150, top: 150, width: 20, height: 20, borderRadius: 10, backgroundColor: 'green' }} />
+          <View style={{ position: 'absolute', left: 250, top: 250, width: 20, height: 20, borderRadius: 10, backgroundColor: 'blue' }} />
+          <View style={{ position: 'absolute', left: 100, top: 200, width: 20, height: 20, borderRadius: 10, backgroundColor: 'yellow' }} />
+        </View>
+        <Text style={{ fontSize: 12, color: '#666', marginBottom: 20 }}>
+          Do you see 4 colored dots above? (red, green, blue, yellow)
+        </Text>
+
         <TouchableOpacity
           style={styles.button}
           onPress={handleGetStarted}
