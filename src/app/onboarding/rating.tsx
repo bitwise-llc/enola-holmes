@@ -11,9 +11,9 @@ export default function RatingScreen() {
       if (await StoreReview.hasAction()) {
         await StoreReview.requestReview();
       }
-      // Navigate to next screen after a short delay
+      // Navigate to paywall, then welcome
       setTimeout(() => {
-        router.push('/onboarding/welcome');
+        router.push('/paywall');
       }, 500);
     };
 

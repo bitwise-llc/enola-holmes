@@ -66,8 +66,8 @@ export default function WelcomeScreen() {
 
       console.log('Profile created:', profileResult);
 
-      // Mark onboarding complete and navigate
-      await setOnboardingCompleted();
+      // Mark onboarding complete in database and navigate
+      await setOnboardingCompleted(userId);
       router.replace('/(tabs)');
     } catch (error) {
       console.error('Signup error:', error);

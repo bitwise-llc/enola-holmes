@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Enola",
-    "slug": "Enola",
+    "slug": "enola",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.tkejriwal.EnolaNew"
+      "bundleIdentifier": "com.tkejriwal.EnolaNew",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -60,6 +63,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d81880c5-4d93-46fb-bd7d-e84b0503abf6"
+      }
+    },
+    "owner": "tkejriwal"
   }
 }
