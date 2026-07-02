@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, Alert, ActivityIndicator } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { setOnboardingCompleted } from '../../utils/storage';
 import { supabase } from '../../utils/supabase';
+import { identifyUser } from '../../utils/revenuecat';
 import { useState } from 'react';
 
 export default function WelcomeScreen() {
@@ -47,7 +48,11 @@ export default function WelcomeScreen() {
       }
 
       console.log('User account created:', userId);
-      console.log('Session will be automatically restored on app restart');
+
+      // Tie RevenueCat to this Supabase user BEFORE they can reach the paywall/coin store.
+      // Without this, a first purchase is attributed to RC's anonymous id and the webhook
+      // can't map it to this profile — coins would be credited to nobody.
+      await identifyUser(userId);
 
       // Create profile using RPC function
       const { data: profileResult, error: profileError } = await supabase

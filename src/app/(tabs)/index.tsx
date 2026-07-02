@@ -6,8 +6,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/utils/supabase';
 
 export default function HomeScreen() {
-  const [coins, setCoins] = useState(1);
+  const [coins, setCoins] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [referral, setReferral] = useState<{ code: string; count: number } | null>(null);
 
   // Reload coins every time the screen comes into focus
   useFocusEffect(
@@ -28,7 +29,7 @@ export default function HomeScreen() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('coins')
+        .select('coins, referral_code, referral_count')
         .eq('id', session.user.id)
         .single();
 
@@ -36,44 +37,16 @@ export default function HomeScreen() {
         console.error('Error loading coins:', error);
       } else if (data) {
         setCoins(data.coins);
+        setReferral({ code: data.referral_code ?? '', count: data.referral_count ?? 0 });
       }
     } catch (error) {
       console.error('Error loading coins:', error);
     }
   };
 
-  const deductCoin = async () => {
-    if (coins <= 0) {
-      Alert.alert('Not Enough Coins', 'You need to purchase more coins to perform a search.');
-      router.push('/coins');
-      return false;
-    }
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        console.error('No session found');
-        return false;
-      }
-
-      const newBalance = coins - 1;
-      const { error } = await supabase
-        .from('profiles')
-        .update({ coins: newBalance })
-        .eq('id', session.user.id);
-
-      if (!error) {
-        setCoins(newBalance);
-        return true;
-      } else {
-        console.error('Error deducting coin:', error);
-      }
-    } catch (error) {
-      console.error('Error deducting coin:', error);
-    }
-    return false;
-  };
+  // Coins are deducted only in scanning.tsx via record_search_and_deduct_coin, tied to a
+  // completed search. This screen only displays the balance — no spend here, or it would
+  // double-charge (two coins per scan).
 
   const pickImageFromGallery = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -126,10 +99,12 @@ export default function HomeScreen() {
         <View style={styles.leftIcons}>
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => {
-              console.log('Settings button pressed');
-              router.push('/settings');
-            }}
+            onPress={() =>
+              router.push({
+                pathname: '/settings',
+                params: referral ? { code: referral.code, count: String(referral.count) } : {},
+              })
+            }
           >
             <Text style={styles.iconText}>⚙️</Text>
           </TouchableOpacity>
@@ -148,7 +123,7 @@ export default function HomeScreen() {
           onPress={() => router.push('/coins')}
         >
           <Text style={styles.coinIcon}>🪙</Text>
-          <Text style={styles.coinText}>{coins}</Text>
+          <Text style={styles.coinText}>{coins ?? '–'}</Text>
         </TouchableOpacity>
       </View>
 

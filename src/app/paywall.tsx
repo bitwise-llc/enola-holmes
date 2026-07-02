@@ -1,129 +1,166 @@
 import { router } from 'expo-router';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
+import type { PurchasesPackage } from 'react-native-purchases';
+import { getSubscriptionOfferings, purchasePackage } from '@/utils/revenuecat';
 
-// Try to import RevenueCat UI - will be undefined in Expo Go
-let RevenueCatUI: any;
-let PAYWALL_RESULT: any;
-
-try {
-  const rcui = require('react-native-purchases-ui');
-  RevenueCatUI = rcui.RevenueCatUI;
-  PAYWALL_RESULT = rcui.PAYWALL_RESULT;
-} catch (e) {
-  console.log('RevenueCat UI not available - running in Expo Go');
-}
+// Custom themed subscription cards (monthly + yearly), matched to the RC `default`
+// offering package identifiers. Replaces the RC native paywall so onboarding shows
+// consistent, themeable cards.
+const SUB_CARDS = [
+  {
+    id: '$rc_monthly',
+    title: 'Monthly',
+    coinsPerPeriod: 15,
+    period: 'month',
+    fallbackPrice: '$9.99',
+    perks: ['15 coins every month', 'Coins for face scans', 'Cancel anytime'],
+  },
+  {
+    id: '$rc_annual',
+    title: 'Yearly',
+    coinsPerPeriod: 120,
+    period: 'year',
+    fallbackPrice: '$89.00',
+    badge: 'BEST VALUE',
+    perks: ['120 coins every year', 'Best value per coin', 'Cancel anytime'],
+  },
+];
 
 export default function PaywallScreen() {
-  const [isNativeAvailable, setIsNativeAvailable] = useState(false);
+  const [packages, setPackages] = useState<PurchasesPackage[]>([]);
+  const [buyingId, setBuyingId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if RevenueCat UI is available (development build)
-    setIsNativeAvailable(!!RevenueCatUI);
+    (async () => {
+      const offering = await getSubscriptionOfferings();
+      setPackages(offering?.availablePackages ?? []);
+    })();
   }, []);
 
-  const handleContinue = () => {
-    router.push('/onboarding/welcome');
-  };
-
-  const handlePurchaseResult = async (result: any) => {
-    console.log('Paywall result:', result);
-
-    switch (result) {
-      case PAYWALL_RESULT?.PURCHASED:
-      case PAYWALL_RESULT?.RESTORED:
-        console.log('✅ User purchased or restored subscription');
-        router.push('/onboarding/welcome');
-        break;
-      case PAYWALL_RESULT?.CANCELLED:
-        console.log('❌ User cancelled paywall');
-        router.push('/onboarding/welcome');
-        break;
-      default:
-        router.push('/onboarding/welcome');
-        break;
+  const subscribe = async (pkg: PurchasesPackage) => {
+    setBuyingId(pkg.identifier);
+    try {
+      const result = await purchasePackage(pkg);
+      if (result) {
+        // Entitlement/coins are handled server-side; move on into the app.
+        router.replace('/onboarding/welcome');
+      }
+    } finally {
+      setBuyingId(null);
     }
   };
 
-  // Show native RevenueCat paywall if available
-  if (isNativeAvailable && RevenueCatUI) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <RevenueCatUI.Paywall
-          options={{
-            shouldBlockTouchesUnderPaywall: true,
-          }}
-          onPurchaseCompleted={handlePurchaseResult}
-          onPurchaseCancelled={handlePurchaseResult}
-          onRestoreCompleted={handlePurchaseResult}
-          onDismiss={() => {
-            console.log('Paywall dismissed');
-            router.push('/onboarding/welcome');
-          }}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  // Fallback UI for Expo Go
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.fallbackContent}>
+      <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Enola Pro</Text>
-        <Text style={styles.message}>
-          In-app purchases require a development build with expo-dev-client.
-        </Text>
-        <Text style={styles.message}>
-          Build the app to see the beautiful RevenueCat paywall!
-        </Text>
+        <Text style={styles.subtitle}>Unlock coins and keep scanning</Text>
 
-        <TouchableOpacity
-          style={styles.continueButton}
-          onPress={handleContinue}
-        >
-          <Text style={styles.continueButtonText}>Continue with Free</Text>
+        {SUB_CARDS.map((card) => {
+          const pkg = packages.find((p) => p.identifier === card.id);
+          const busy = buyingId === card.id;
+          return (
+            <View key={card.id} style={styles.card}>
+              {card.badge && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{card.badge}</Text>
+                </View>
+              )}
+              <Text style={styles.cardTitle}>{card.title}</Text>
+              <Text style={styles.cardCoins}>{card.coinsPerPeriod} coins / {card.period}</Text>
+              <View style={styles.priceRow}>
+                <Text style={styles.price}>{pkg?.product.priceString ?? card.fallbackPrice}</Text>
+                <Text style={styles.period}> / {card.period}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.button}
+                disabled={!!buyingId}
+                onPress={() => {
+                  if (pkg) subscribe(pkg);
+                  else Alert.alert('Unavailable', 'Subscriptions are not available right now. Please try again later.');
+                }}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.buttonText}>Get {card.title}</Text>
+                )}
+              </TouchableOpacity>
+              {card.perks.map((perk) => (
+                <View key={perk} style={styles.perkRow}>
+                  <Text style={styles.perkCheck}>✓</Text>
+                  <Text style={styles.perkText}>{perk}</Text>
+                </View>
+              ))}
+            </View>
+          );
+        })}
+
+        <TouchableOpacity style={styles.freeButton} onPress={() => router.push('/onboarding/welcome')}>
+          <Text style={styles.freeButtonText}>Continue with Free</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  fallbackContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
+  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  content: { paddingHorizontal: 20, paddingVertical: 24, gap: 16 },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '700',
     color: '#1C1C1E',
-    marginBottom: 24,
     textAlign: 'center',
+    letterSpacing: -0.8,
   },
-  message: {
-    fontSize: 16,
+  subtitle: {
+    fontSize: 15,
     color: '#8E8E93',
     textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 22,
+    marginBottom: 8,
+    fontWeight: '500',
   },
-  continueButton: {
-    marginTop: 32,
-    backgroundColor: '#0EA5E9',
-    paddingHorizontal: 32,
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  badge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  cardTitle: { fontSize: 26, fontWeight: '700', color: '#1C1C1E', letterSpacing: -0.6 },
+  cardCoins: { fontSize: 15, color: '#8E8E93', marginTop: 2, marginBottom: 16, fontWeight: '500' },
+  priceRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 16 },
+  price: { fontSize: 34, fontWeight: '700', color: '#1C1C1E', letterSpacing: -1 },
+  period: { fontSize: 16, color: '#8E8E93', fontWeight: '500' },
+  button: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 14,
     paddingVertical: 16,
-    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 18,
   },
-  continueButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
+  buttonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600', letterSpacing: -0.3 },
+  perkRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  perkCheck: { fontSize: 16, color: '#34C759', marginRight: 10, fontWeight: '700' },
+  perkText: { fontSize: 15, color: '#3C3C43', fontWeight: '400', letterSpacing: -0.3 },
+  freeButton: { paddingVertical: 16, alignItems: 'center' },
+  freeButtonText: { fontSize: 16, color: '#8E8E93', fontWeight: '600' },
 });
