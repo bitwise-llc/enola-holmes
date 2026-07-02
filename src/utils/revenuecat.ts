@@ -9,6 +9,29 @@ export const PRODUCT_IDS = {
 };
 
 export const OFFERING_ID = 'default';
+export const COIN_OFFERING_ID = 'coins';
+
+// The coin-store offering (consumables). Separate from the subscription paywall.
+export const getCoinOfferings = async (): Promise<PurchasesOffering | null> => {
+  try {
+    const offerings = await Purchases.getOfferings();
+    return offerings.all[COIN_OFFERING_ID] ?? null;
+  } catch (error) {
+    console.error('❌ Error fetching coin offerings:', error);
+    return null;
+  }
+};
+
+// The subscription offering (monthly + yearly auto-renewables) in the `default` offering.
+export const getSubscriptionOfferings = async (): Promise<PurchasesOffering | null> => {
+  try {
+    const offerings = await Purchases.getOfferings();
+    return offerings.all[OFFERING_ID] ?? offerings.current ?? null;
+  } catch (error) {
+    console.error('❌ Error fetching subscription offerings:', error);
+    return null;
+  }
+};
 
 export const initializeRevenueCat = async (userId?: string): Promise<void> => {
   try {

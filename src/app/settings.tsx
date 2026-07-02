@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View, Text, TouchableOpacity, Linking, ScrollView, Share, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/utils/supabase';
@@ -7,12 +7,13 @@ import * as Clipboard from 'expo-clipboard';
 import * as StoreReview from 'expo-store-review';
 
 export default function SettingsScreen() {
-  const [referralCode, setReferralCode] = useState('');
-  const [referralCount, setReferralCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const params = useLocalSearchParams<{ code?: string; count?: string }>();
+  const [referralCode, setReferralCode] = useState(params.code ?? '');
+  const [referralCount, setReferralCount] = useState(Number(params.count ?? 0));
+  const [loading, setLoading] = useState(!params.code);
 
   useEffect(() => {
-    loadReferralInfo();
+    if (!params.code) loadReferralInfo(); // params already have it — no fetch, no pop-in
   }, []);
 
   const loadReferralInfo = async () => {
