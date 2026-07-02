@@ -1,9 +1,14 @@
 import { router } from 'expo-router';
-import { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { StyleSheet, View, Text, ScrollView, Alert, ActivityIndicator, Animated, Easing, LayoutChangeEvent } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { PurchasesPackage } from 'react-native-purchases';
+import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import { getCoins, getReferralInfo } from '@/utils/coins';
+import { EnolaHeading } from '@/components/enola-heading';
+import { SubscriptionDisclosure } from '@/components/subscription-disclosure';
 import { getCoinOfferings, getSubscriptionOfferings, purchasePackage } from '@/utils/revenuecat';
 
 // Coin packs (consumables), matched to RC `coins` offering package identifiers.
@@ -15,32 +20,33 @@ const COIN_CARDS = [
   { id: '50Coins', coins: 50, fallbackPrice: '$99.99', badge: 'BEST VALUE' },
 ];
 
-// Subscription cards, matched to RC `default` offering package identifiers.
-const SUB_CARDS = [
-  {
-    id: '$rc_monthly',
-    title: 'Monthly',
-    coinsPerPeriod: 15,
-    period: 'month',
-    fallbackPrice: '$9.99',
-    perks: ['15 coins every month', 'Coins for face scans', 'Cancel anytime'],
-  },
-  {
-    id: '$rc_annual',
-    title: 'Yearly',
-    coinsPerPeriod: 120,
-    period: 'year',
-    fallbackPrice: '$89.00',
-    badge: 'BEST VALUE',
-    perks: ['120 coins every year', 'Best value per coin', 'Cancel anytime'],
-  },
-];
-
 export default function CoinsScreen() {
   const [tab, setTab] = useState<'topup' | 'subscription'>('topup');
+  const [trackWidth, setTrackWidth] = useState(0);
+  const pillX = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(1)).current;
+
+  const switchTab = (next: 'topup' | 'subscription') => {
+    if (next === tab) return;
+    Animated.parallel([
+      Animated.timing(pillX, {
+        toValue: next === 'topup' ? 0 : 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.timing(contentOpacity, { toValue: 0, duration: 110, useNativeDriver: true }),
+        Animated.timing(contentOpacity, { toValue: 1, duration: 160, useNativeDriver: true }),
+      ]),
+    ]).start();
+    // Swap content at the fade's midpoint so it changes while invisible.
+    setTimeout(() => setTab(next), 110);
+  };
+
+  const pillWidth = trackWidth > 0 ? (trackWidth - 8) / 2 : 0; // track padding 4 each side
   const [coins, setCoins] = useState<number | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
-  const [subPackages, setSubPackages] = useState<PurchasesPackage[]>([]);
   const [offeringsLoaded, setOfferingsLoaded] = useState(false);
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [referral, setReferral] = useState<{ code: string; count: number } | null>(null);
@@ -49,12 +55,8 @@ export default function CoinsScreen() {
     getReferralInfo().then(setReferral); // prefetch so /settings renders instantly
     (async () => {
       setCoins(await getCoins());
-      const [coinOffering, subOffering] = await Promise.all([
-        getCoinOfferings(),
-        getSubscriptionOfferings(),
-      ]);
+      const coinOffering = await getCoinOfferings();
       setPackages(coinOffering?.availablePackages ?? []);
-      setSubPackages(subOffering?.availablePackages ?? []);
       setOfferingsLoaded(true);
     })();
   }, []);
@@ -93,13 +95,26 @@ export default function CoinsScreen() {
     }
   };
 
+  // Presents the RC-hosted Paywall template for the `default` (subscription) offering.
+  const showSubscriptionPaywall = async () => {
+    const offering = await getSubscriptionOfferings();
+    if (!offering) {
+      Alert.alert('Unavailable', 'Subscriptions are not available right now. Please try again later.');
+      return;
+    }
+    const result = await RevenueCatUI.presentPaywall({ offering });
+    if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+      setCoins(await getCoins()); // entitlement/coins handled server-side; refresh display
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.logo}>Enola</Text>
+        <HapticTouchable onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={28} color="#007AFF" />
+        </HapticTouchable>
+        <EnolaHeading style={styles.logo} />
         <View style={styles.coinBadge}>
           <Text style={styles.coinIcon}>🪙</Text>
           <Text style={styles.coinText}>{coins ?? '–'}</Text>
@@ -107,22 +122,33 @@ export default function CoinsScreen() {
       </View>
 
       {/* Segmented toggle: Coin Top-Up vs Subscription */}
-      <View style={styles.toggleRow}>
-        <TouchableOpacity
-          style={[styles.toggleTab, tab === 'topup' && styles.toggleTabActive]}
-          onPress={() => setTab('topup')}
-        >
+      <View
+        style={styles.toggleRow}
+        onLayout={(e: LayoutChangeEvent) => setTrackWidth(e.nativeEvent.layout.width)}
+      >
+        {pillWidth > 0 && (
+          <Animated.View
+            style={[
+              styles.togglePill,
+              {
+                width: pillWidth,
+                transform: [
+                  { translateX: pillX.interpolate({ inputRange: [0, 1], outputRange: [0, pillWidth] }) },
+                ],
+              },
+            ]}
+          />
+        )}
+        <HapticTouchable style={styles.toggleTab} onPress={() => switchTab('topup')}>
           <Text style={[styles.toggleText, tab === 'topup' && styles.toggleTextActive]}>Coin Top-Up</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleTab, tab === 'subscription' && styles.toggleTabActive]}
-          onPress={() => setTab('subscription')}
-        >
+        </HapticTouchable>
+        <HapticTouchable style={styles.toggleTab} onPress={() => switchTab('subscription')}>
           <Text style={[styles.toggleText, tab === 'subscription' && styles.toggleTextActive]}>Subscription</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <Animated.View style={{ opacity: contentOpacity }}>
         {tab === 'topup' ? (
           <>
             <View style={styles.heroSection}>
@@ -136,7 +162,7 @@ export default function CoinsScreen() {
                 const pkg = packages.find((p) => p.identifier === card.id);
                 const busy = buyingId === card.id;
                 return (
-                  <TouchableOpacity
+                  <HapticTouchable
                     key={card.id}
                     style={styles.packageCard}
                     disabled={!!buyingId}
@@ -159,66 +185,30 @@ export default function CoinsScreen() {
                         <Text style={styles.priceText}>{pkg?.product.priceString ?? card.fallbackPrice}</Text>
                       )}
                     </View>
-                  </TouchableOpacity>
+                  </HapticTouchable>
                 );
               })}
             </View>
 
-            <TouchableOpacity style={styles.inviteButton} onPress={() => router.push({ pathname: '/settings', params: referral ? { code: referral.code, count: String(referral.count) } : {} })}>
+            <HapticTouchable style={styles.inviteButton} onPress={() => router.push({ pathname: '/settings', params: referral ? { code: referral.code, count: String(referral.count) } : {} })}>
               <Text style={styles.inviteButtonText}>Invite Friends & Earn Free Coins</Text>
-            </TouchableOpacity>
+            </HapticTouchable>
           </>
         ) : (
           <View style={styles.subList}>
-            {SUB_CARDS.map((card) => {
-              const pkg = subPackages.find((p) => p.identifier === card.id);
-              const busy = buyingId === card.id;
-              return (
-                <View key={card.id} style={styles.subCard}>
-                  {card.badge && (
-                    <View style={styles.subBadge}>
-                      <Text style={styles.badgeText}>{card.badge}</Text>
-                    </View>
-                  )}
-                  <Text style={styles.subTitle}>{card.title}</Text>
-                  <Text style={styles.subCoins}>{card.coinsPerPeriod} coins / {card.period}</Text>
-                  <View style={styles.subPriceRow}>
-                    {offeringsLoaded ? (
-                      <>
-                        <Text style={styles.subPrice}>{pkg?.product.priceString ?? card.fallbackPrice}</Text>
-                        <Text style={styles.subPeriod}> / {card.period}</Text>
-                      </>
-                    ) : (
-                      <ActivityIndicator color="#1C1C1E" />
-                    )}
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.subButton}
-                    disabled={!!buyingId}
-                    onPress={() => {
-                      if (pkg) purchaseCoins(pkg);
-                      else Alert.alert('Unavailable', 'Subscriptions are not available right now. Please try again later.');
-                    }}
-                  >
-                    {busy ? (
-                      <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                      <Text style={styles.subButtonText}>Get {card.title}</Text>
-                    )}
-                  </TouchableOpacity>
-
-                  {card.perks.map((perk) => (
-                    <View key={perk} style={styles.subPerkRow}>
-                      <Text style={styles.subPerkCheck}>✓</Text>
-                      <Text style={styles.subPerkText}>{perk}</Text>
-                    </View>
-                  ))}
-                </View>
-              );
-            })}
+            <View style={styles.heroSection}>
+              <Text style={styles.coinEmoji}>♾️</Text>
+              <Text style={styles.title}>Enola Pro</Text>
+              <Text style={styles.subtitle}>Monthly coins, best value per scan</Text>
+            </View>
+            <HapticTouchable style={styles.subButton} onPress={showSubscriptionPaywall}>
+              <Text style={styles.subButtonText}>View Subscription Plans</Text>
+            </HapticTouchable>
           </View>
         )}
+        </Animated.View>
+
+        <SubscriptionDisclosure />
       </ScrollView>
     </SafeAreaView>
   );
@@ -292,8 +282,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 9,
   },
-  toggleTabActive: {
+  togglePill: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    bottom: 4,
     backgroundColor: '#FFFFFF',
+    borderRadius: 9,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
@@ -417,84 +412,16 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     gap: 16,
   },
-  subCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  subBadge: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    backgroundColor: '#FF3B30',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  subTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#1C1C1E',
-    letterSpacing: -0.6,
-  },
-  subCoins: {
-    fontSize: 15,
-    color: '#8E8E93',
-    marginTop: 2,
-    marginBottom: 16,
-    fontWeight: '500',
-  },
-  subPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 16,
-  },
-  subPrice: {
-    fontSize: 34,
-    fontWeight: '700',
-    color: '#1C1C1E',
-    letterSpacing: -1,
-  },
-  subPeriod: {
-    fontSize: 16,
-    color: '#8E8E93',
-    fontWeight: '500',
-  },
   subButton: {
     backgroundColor: '#1C1C1E',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
-    marginBottom: 18,
   },
   subButtonText: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '600',
-    letterSpacing: -0.3,
-  },
-  subPerkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  subPerkCheck: {
-    fontSize: 16,
-    color: '#34C759',
-    marginRight: 10,
-    fontWeight: '700',
-  },
-  subPerkText: {
-    fontSize: 15,
-    color: '#3C3C43',
-    fontWeight: '400',
     letterSpacing: -0.3,
   },
 });

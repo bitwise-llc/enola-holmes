@@ -1,10 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View, Text, TouchableOpacity, Linking, ScrollView, Share, Alert } from 'react-native';
+import { StyleSheet, View, Text, Linking, ScrollView, Share, Alert } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/utils/supabase';
 import { useState, useEffect } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import * as StoreReview from 'expo-store-review';
+import { LEGAL_URLS } from '@/components/subscription-disclosure';
 
 export default function SettingsScreen() {
   const params = useLocalSearchParams<{ code?: string; count?: string }>();
@@ -50,7 +53,7 @@ export default function SettingsScreen() {
 
     try {
       await Share.share({
-        message: `Join me on Enola and get 2 free coins! Use my referral code: ${referralCode}\n\nDownload: https://enola.app`,
+        message: `Join me on Enola and get 2 free coins! Use my referral code: ${referralCode}\n\nDownload: https://tryenola.com`,
         title: 'Join Enola',
       });
     } catch (error) {
@@ -65,6 +68,19 @@ export default function SettingsScreen() {
     Alert.alert('Copied!', 'Referral code copied to clipboard');
   };
 
+  // Guarded opener: mailto/http can throw if no handler is configured on the device.
+  const openUrl = async (url: string) => {
+    try {
+      if (await Linking.canOpenURL(url)) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Unavailable', "Couldn't open that link on this device.");
+      }
+    } catch {
+      Alert.alert('Unavailable', "Couldn't open that link on this device.");
+    }
+  };
+
   const handleGiveUsLove = async () => {
     const isAvailable = await StoreReview.isAvailableAsync();
 
@@ -73,20 +89,58 @@ export default function SettingsScreen() {
       await StoreReview.requestReview();
     } else {
       // Fallback to App Store URL if review prompt not available
-      Linking.openURL('https://apps.apple.com/app/enola');
+      // TODO: replace with the real listing URL (https://apps.apple.com/app/<name>/id<APP_ID>)
+      openUrl('https://apps.apple.com/app/enola');
     }
   };
 
   const handlePrivacyPolicy = () => {
-    Linking.openURL('https://enola.app/privacy');
+    openUrl(LEGAL_URLS.privacy);
   };
 
   const handleTerms = () => {
-    Linking.openURL('https://enola.app/terms');
+    openUrl(LEGAL_URLS.terms);
   };
 
   const handleGetHelp = () => {
-    Linking.openURL('mailto:help@tryenola.com');
+    openUrl('mailto:support@tryenola.com');
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your account, coins, and search history. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+              Alert.alert('Not signed in', 'No account is currently signed in.');
+              return;
+            }
+            const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`;
+            try {
+              const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  apikey: process.env.EXPO_PUBLIC_SUPABASE_KEY ?? '',
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+              });
+              if (!res.ok) throw new Error(String(res.status));
+              await supabase.auth.signOut();
+              router.replace('/');
+            } catch (e) {
+              console.error('Delete account failed:', e);
+              Alert.alert('Error', "Couldn't delete your account. Please try again or contact support.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -94,12 +148,12 @@ export default function SettingsScreen() {
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
-          <TouchableOpacity
+          <HapticTouchable
             onPress={() => router.back()}
             style={styles.closeButton}
           >
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
+            <Ionicons name="close" size={22} color="#8E8E93" />
+          </HapticTouchable>
         </View>
 
         <ScrollView style={styles.scrollView}>
@@ -116,20 +170,20 @@ export default function SettingsScreen() {
                   <Text style={styles.codeLabel}>Your Code</Text>
                   <Text style={styles.code}>{referralCode}</Text>
                 </View>
-                <TouchableOpacity
+                <HapticTouchable
                   style={styles.copyButton}
                   onPress={handleCopyCode}
                 >
                   <Text style={styles.copyButtonText}>Copy</Text>
-                </TouchableOpacity>
+                </HapticTouchable>
               </View>
 
-              <TouchableOpacity
+              <HapticTouchable
                 style={styles.shareButton}
                 onPress={handleShareReferral}
               >
                 <Text style={styles.shareButtonText}>Share Referral Code</Text>
-              </TouchableOpacity>
+              </HapticTouchable>
 
               <View style={styles.statsContainer}>
                 <View style={styles.statItem}>
@@ -146,31 +200,38 @@ export default function SettingsScreen() {
           )}
 
           <View style={styles.menuContainer}>
-              <TouchableOpacity style={styles.menuItem} onPress={handleGiveUsLove}>
+              <HapticTouchable style={styles.menuItem} onPress={handleGiveUsLove}>
                 <Text style={styles.menuText}>Rate Enola</Text>
                 <Text style={styles.menuArrow}>›</Text>
-              </TouchableOpacity>
+              </HapticTouchable>
 
               <View style={styles.divider} />
 
-              <TouchableOpacity style={styles.menuItem} onPress={handlePrivacyPolicy}>
+              <HapticTouchable style={styles.menuItem} onPress={handlePrivacyPolicy}>
                 <Text style={styles.menuText}>Privacy Policy</Text>
                 <Text style={styles.menuArrow}>›</Text>
-              </TouchableOpacity>
+              </HapticTouchable>
 
               <View style={styles.divider} />
 
-              <TouchableOpacity style={styles.menuItem} onPress={handleTerms}>
+              <HapticTouchable style={styles.menuItem} onPress={handleTerms}>
                 <Text style={styles.menuText}>Terms & Conditions</Text>
                 <Text style={styles.menuArrow}>›</Text>
-              </TouchableOpacity>
+              </HapticTouchable>
 
               <View style={styles.divider} />
 
-              <TouchableOpacity style={styles.menuItem} onPress={handleGetHelp}>
+              <HapticTouchable style={styles.menuItem} onPress={handleGetHelp}>
                 <Text style={styles.menuText}>Get Help</Text>
                 <Text style={styles.menuArrow}>›</Text>
-              </TouchableOpacity>
+              </HapticTouchable>
+
+              <View style={styles.divider} />
+
+              <HapticTouchable style={styles.menuItem} onPress={handleDeleteAccount}>
+                <Text style={[styles.menuText, styles.menuTextDestructive]}>Delete Account</Text>
+                <Text style={styles.menuArrow}>›</Text>
+              </HapticTouchable>
           </View>
 
           <View style={styles.footer}>
@@ -372,6 +433,9 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     fontWeight: '400',
     letterSpacing: -0.4,
+  },
+  menuTextDestructive: {
+    color: '#FF3B30',
   },
   menuArrow: {
     fontSize: 20,

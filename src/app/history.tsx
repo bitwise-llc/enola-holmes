@@ -1,8 +1,10 @@
 import { router } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Image, Alert } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Image, Alert } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { getRecentSearches, getSearchById } from '@/utils/searchService';
 
 type SearchRecord = {
@@ -70,9 +72,9 @@ export default function HistoryScreen() {
         style={styles.gradient}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>✕</Text>
-          </TouchableOpacity>
+          <HapticTouchable onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="close" size={22} color="#1C1C1E" />
+          </HapticTouchable>
           <Text style={styles.logo}>Search History</Text>
           <View style={styles.placeholder} />
         </View>
@@ -85,11 +87,11 @@ export default function HistoryScreen() {
           ) : searches.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconContainer}>
-                <Text style={styles.emptyIcon}>🔍</Text>
+                <Ionicons name="search" size={48} color="#1C1C1E" />
               </View>
               <Text style={styles.emptyTitle}>No Searches Yet</Text>
               <Text style={styles.emptyText}>Your search history will appear here</Text>
-              <TouchableOpacity
+              <HapticTouchable
                 style={styles.startButton}
                 onPress={() => router.replace('/(tabs)')}
               >
@@ -101,11 +103,11 @@ export default function HistoryScreen() {
                 >
                   <Text style={styles.startButtonText}>Start Searching</Text>
                 </LinearGradient>
-              </TouchableOpacity>
+              </HapticTouchable>
             </View>
           ) : (
             searches.map((search) => (
-              <TouchableOpacity
+              <HapticTouchable
                 key={search.id}
                 style={styles.historyItem}
                 onPress={() => viewSearchDetails(search.id)}
@@ -126,9 +128,9 @@ export default function HistoryScreen() {
                   </View>
                 </View>
                 <View style={styles.arrowContainer}>
-                  <Text style={styles.arrowIcon}>→</Text>
+                  <Ionicons name="chevron-forward" size={18} color="#0EA5E9" />
                 </View>
-              </TouchableOpacity>
+              </HapticTouchable>
             ))
           )}
         </ScrollView>

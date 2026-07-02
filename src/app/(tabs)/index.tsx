@@ -1,9 +1,13 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Alert, Image } from 'react-native';
+import { StyleSheet, View, Text, Alert, Image, Linking } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/utils/supabase';
+import { EnolaHeading } from '@/components/enola-heading';
+import { LEGAL_URLS } from '@/components/subscription-disclosure';
 
 export default function HomeScreen() {
   const [coins, setCoins] = useState<number | null>(null);
@@ -97,7 +101,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.leftIcons}>
-          <TouchableOpacity
+          <HapticTouchable
             style={styles.iconButton}
             onPress={() =>
               router.push({
@@ -106,25 +110,25 @@ export default function HomeScreen() {
               })
             }
           >
-            <Text style={styles.iconText}>⚙️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+            <Ionicons name="settings-outline" size={18} color="#1C1C1E" />
+          </HapticTouchable>
+          <HapticTouchable
             style={styles.iconButton}
             onPress={() => router.push('/history')}
           >
-            <Text style={styles.iconText}>🕐</Text>
-          </TouchableOpacity>
+            <Ionicons name="time-outline" size={18} color="#1C1C1E" />
+          </HapticTouchable>
         </View>
 
-        <Text style={styles.logo}>Enola</Text>
+        <EnolaHeading style={styles.logo} />
 
-        <TouchableOpacity
+        <HapticTouchable
           style={styles.coinBadge}
           onPress={() => router.push('/coins')}
         >
           <Text style={styles.coinIcon}>🪙</Text>
           <Text style={styles.coinText}>{coins ?? '–'}</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
       </View>
 
       <View style={styles.content}>
@@ -146,23 +150,33 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.footer}>
-        <TouchableOpacity
+        <HapticTouchable
           style={styles.cameraButton}
           onPress={takePhoto}
         >
-          <Text style={styles.buttonIcon}>📷</Text>
+          <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
           <Text style={styles.cameraButtonText}>Use Camera</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
 
-        <TouchableOpacity
+        <HapticTouchable
           style={styles.libraryButton}
           onPress={pickImageFromGallery}
         >
-          <Text style={styles.buttonIcon}>🖼️</Text>
+          <Ionicons name="images-outline" size={20} color="#1C1C1E" />
           <Text style={styles.libraryButtonText}>Photo Library</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
 
-        <Text style={styles.trustText}>🔒 Trusted for dating safety</Text>
+        <Text style={styles.disclosureText}>
+          The photo you choose is sent to a third-party face-search service to look for
+          matching public profiles. See our{' '}
+          <Text
+            style={styles.disclosureLink}
+            onPress={() => Linking.openURL(LEGAL_URLS.privacy).catch(() => {})}
+          >
+            Privacy Policy
+          </Text>
+          .
+        </Text>
       </View>
     </SafeAreaView>
   );
@@ -340,5 +354,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontWeight: '400',
     letterSpacing: -0.2,
+  },
+  disclosureText: {
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginTop: 12,
+    paddingHorizontal: 8,
+  },
+  disclosureLink: {
+    textDecorationLine: 'underline',
   },
 });

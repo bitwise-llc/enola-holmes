@@ -1,8 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Image, Linking } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Image, Linking } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { EnolaHeading } from '@/components/enola-heading';
 
 interface FaceCheckResult {
   score: number;
@@ -22,48 +25,48 @@ const detectPlatform = (url: string): { platform: string; color: string; icon: s
 
   if (urlLower.includes('instagram.com')) {
     const match = url.match(/instagram\.com\/([^/?]+)/);
-    return { platform: 'Instagram', color: '#E4405F', icon: '📷', username: match?.[1] };
+    return { platform: 'Instagram', color: '#E4405F', icon: 'logo-instagram', username: match?.[1] };
   }
   if (urlLower.includes('tiktok.com')) {
     const match = url.match(/tiktok\.com\/@([^/?]+)/);
-    return { platform: 'TikTok', color: '#000000', icon: '🎵', username: match?.[1] };
+    return { platform: 'TikTok', color: '#000000', icon: 'logo-tiktok', username: match?.[1] };
   }
   if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) {
-    return { platform: 'YouTube', color: '#FF0000', icon: '▶️', username: undefined };
+    return { platform: 'YouTube', color: '#FF0000', icon: 'logo-youtube', username: undefined };
   }
   if (urlLower.includes('twitter.com') || urlLower.includes('x.com')) {
     const match = url.match(/(?:twitter|x)\.com\/([^/?]+)/);
-    return { platform: 'X (Twitter)', color: '#000000', icon: '𝕏', username: match?.[1] };
+    return { platform: 'X (Twitter)', color: '#000000', icon: 'logo-twitter', username: match?.[1] };
   }
   if (urlLower.includes('facebook.com') || urlLower.includes('fb.com')) {
-    return { platform: 'Facebook', color: '#1877F2', icon: '👥', username: undefined };
+    return { platform: 'Facebook', color: '#1877F2', icon: 'logo-facebook', username: undefined };
   }
   if (urlLower.includes('onlyfans.com')) {
     const match = url.match(/onlyfans\.com\/([^/?]+)/);
-    return { platform: 'OnlyFans', color: '#00AFF0', icon: '💎', username: match?.[1] };
+    return { platform: 'OnlyFans', color: '#00AFF0', icon: 'diamond', username: match?.[1] };
   }
   if (urlLower.includes('linkedin.com')) {
-    return { platform: 'LinkedIn', color: '#0A66C2', icon: '💼', username: undefined };
+    return { platform: 'LinkedIn', color: '#0A66C2', icon: 'logo-linkedin', username: undefined };
   }
   if (urlLower.includes('snapchat.com')) {
-    return { platform: 'Snapchat', color: '#FFFC00', icon: '👻', username: undefined };
+    return { platform: 'Snapchat', color: '#FFFC00', icon: 'logo-snapchat', username: undefined };
   }
   if (urlLower.includes('reddit.com')) {
-    return { platform: 'Reddit', color: '#FF4500', icon: '🤖', username: undefined };
+    return { platform: 'Reddit', color: '#FF4500', icon: 'logo-reddit', username: undefined };
   }
   if (urlLower.includes('twitch.tv')) {
     const match = url.match(/twitch\.tv\/([^/?]+)/);
-    return { platform: 'Twitch', color: '#9146FF', icon: '🎮', username: match?.[1] };
+    return { platform: 'Twitch', color: '#9146FF', icon: 'logo-twitch', username: match?.[1] };
   }
 
-  return { platform: 'Other', color: '#8E8E93', icon: '🌐', username: undefined };
+  return { platform: 'Other', color: '#8E8E93', icon: 'globe-outline', username: undefined };
 };
 
 const ResultCard = ({ result }: { result: CategorizedResult }) => {
   const [imageError, setImageError] = useState(false);
 
   return (
-    <TouchableOpacity
+    <HapticTouchable
       style={styles.resultCard}
       onPress={() => Linking.openURL(result.url)}
       activeOpacity={0.7}
@@ -77,7 +80,7 @@ const ResultCard = ({ result }: { result: CategorizedResult }) => {
         />
       ) : (
         <View style={[styles.resultThumbnail, styles.placeholderThumbnail]}>
-          <Text style={styles.placeholderIcon}>{result.platformIcon}</Text>
+          <Ionicons name={result.platformIcon as any} size={44} color={result.platformColor} />
         </View>
       )}
 
@@ -114,7 +117,7 @@ const ResultCard = ({ result }: { result: CategorizedResult }) => {
       <View style={styles.arrowContainer}>
         <Text style={styles.arrowIcon}>→</Text>
       </View>
-    </TouchableOpacity>
+    </HapticTouchable>
   );
 };
 
@@ -172,10 +175,10 @@ export default function ResultsScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <HapticTouchable onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>✕</Text>
-          </TouchableOpacity>
-          <Text style={styles.logo}>Enola</Text>
+          </HapticTouchable>
+          <EnolaHeading style={styles.logo} />
           <View style={styles.placeholder} />
         </View>
 
@@ -189,9 +192,6 @@ export default function ResultsScreen() {
                 resizeMode="cover"
               />
             )}
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedIcon}>✓</Text>
-            </View>
           </View>
 
           {/* Results Summary */}
@@ -204,7 +204,7 @@ export default function ResultsScreen() {
               <View style={styles.platformTags}>
                 {sortedPlatforms.slice(0, 5).map((platform) => (
                   <View key={platform} style={styles.platformTag}>
-                    <Text style={styles.platformTagIcon}>{categorizedResults[platform][0].platformIcon}</Text>
+                    <Ionicons name={categorizedResults[platform][0].platformIcon as any} size={16} color={categorizedResults[platform][0].platformColor} />
                     <Text style={styles.platformTagText}>
                       {categorizedResults[platform].length}
                     </Text>
@@ -220,9 +220,7 @@ export default function ResultsScreen() {
               <View key={platform} style={styles.platformSection}>
                 <View style={styles.platformHeader}>
                   <View style={styles.platformTitleRow}>
-                    <Text style={styles.platformIcon}>
-                      {categorizedResults[platform][0].platformIcon}
-                    </Text>
+                    <Ionicons name={categorizedResults[platform][0].platformIcon as any} size={24} color={categorizedResults[platform][0].platformColor} />
                     <Text style={styles.platformTitle}>{platform}</Text>
                   </View>
                   <View style={[styles.platformBadge, { backgroundColor: `${categorizedResults[platform][0].platformColor}15` }]}>
@@ -240,7 +238,7 @@ export default function ResultsScreen() {
           ) : (
             <View style={styles.noResultsCard}>
               <View style={styles.noResultsIconContainer}>
-                <Text style={styles.noResultsIcon}>🔍</Text>
+                <Ionicons name="search" size={40} color="#1C1C1E" />
               </View>
               <Text style={styles.noResultsTitle}>No Matches Found</Text>
               <Text style={styles.noResultsText}>
@@ -251,7 +249,7 @@ export default function ResultsScreen() {
 
           {/* Actions */}
           <View style={styles.actions}>
-            <TouchableOpacity
+            <HapticTouchable
               style={styles.primaryButton}
               onPress={() => router.replace('/(tabs)')}
               activeOpacity={0.8}
@@ -264,16 +262,7 @@ export default function ResultsScreen() {
               >
                 <Text style={styles.primaryButtonText}>New Search</Text>
               </LinearGradient>
-            </TouchableOpacity>
-
-            {totalResults > 0 && (
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.secondaryButtonText}>📤 Share Results</Text>
-              </TouchableOpacity>
-            )}
+            </HapticTouchable>
           </View>
         </ScrollView>
       </LinearGradient>

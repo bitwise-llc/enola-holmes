@@ -1,25 +1,31 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StaggerIn } from '../../components/stagger-in';
+import { Pagination } from '../../components/pagination';
+import { onboardingAnswers } from '../../utils/onboardingAnswers';
 
 type Option = {
   id: string;
   icon: string;
   label: string;
+  wide?: boolean; // spans the full row instead of sharing a column
 };
 
 const options: Option[] = [
-  { id: 'criminals', icon: '🚨', label: 'Potential criminals' },
-  { id: 'dating', icon: '👀', label: 'Dating matches' },
-  { id: 'significant', icon: '💍', label: 'Significant other' },
-  { id: 'ex', icon: '💔', label: 'EXBF/GF' },
-  { id: 'myself', icon: '💎', label: 'Myself' },
-  { id: 'doppelganger', icon: '👯', label: 'Doppelganger' },
-  { id: 'uber', icon: '🚗', label: 'Uber drivers' },
-  { id: 'employers', icon: '💼', label: 'Potential employers' },
-  { id: 'employees', icon: '👤', label: 'Potential employees' },
-  { id: 'prefer', icon: '😶', label: 'Prefer not to say' },
+  { id: 'criminals', icon: 'warning-outline', label: 'Potential criminals', wide: true },
+  { id: 'dating', icon: 'eye-outline', label: 'Dating matches' },
+  { id: 'significant', icon: 'heart-outline', label: 'Significant other' },
+  { id: 'ex', icon: 'heart-dislike-outline', label: 'EXBF/GF' },
+  { id: 'myself', icon: 'diamond-outline', label: 'Myself' },
+  { id: 'doppelganger', icon: 'people-outline', label: 'Doppelganger' },
+  { id: 'uber', icon: 'car-outline', label: 'Uber drivers' },
+  { id: 'employers', icon: 'briefcase-outline', label: 'Potential employers' },
+  { id: 'employees', icon: 'person-outline', label: 'Potential employees' },
+  { id: 'prefer', icon: 'help-circle-outline', label: 'Prefer not to say' },
 ];
 
 export default function SearchTargetScreen() {
@@ -33,64 +39,63 @@ export default function SearchTargetScreen() {
     }
   };
 
+  const goNext = () => {
+    onboardingAnswers.searchTargets = selected;
+    router.push('/onboarding/preferences');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
+        <HapticTouchable onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color="#007AFF" />
+        </HapticTouchable>
         <Text style={styles.logo}>Enola</Text>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        <StaggerIn>
         <Text style={styles.title}>Who do you plan to search?</Text>
 
         <View style={styles.optionsGrid}>
           {options.map((option) => (
-            <TouchableOpacity
+            <HapticTouchable
               key={option.id}
               style={[
                 styles.optionButton,
+                option.wide && styles.optionButtonWide,
                 selected.includes(option.id) && styles.optionButtonSelected,
               ]}
               onPress={() => toggleOption(option.id)}
             >
-              <Text style={styles.optionIcon}>{option.icon}</Text>
-              <Text style={[
-                styles.optionLabel,
-                { color: selected.includes(option.id) ? '#FFF' : '#000' }
-              ]}>{option.label}</Text>
-            </TouchableOpacity>
+              <Ionicons name={option.icon as any} size={17} color={selected.includes(option.id) ? '#FFF' : '#1C1C1E'} />
+              <Text
+                numberOfLines={2}
+                style={[
+                  styles.optionLabel,
+                  { color: selected.includes(option.id) ? '#FFF' : '#000' }
+                ]}
+              >{option.label}</Text>
+            </HapticTouchable>
           ))}
         </View>
+        </StaggerIn>
       </ScrollView>
 
       <View style={styles.footer}>
-        <View style={styles.pagination}>
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={styles.dot} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-        </View>
+        <Pagination step={4} />
 
-        <TouchableOpacity
+        <HapticTouchable
           style={[styles.button, !selected.length && styles.buttonDisabled]}
-          onPress={() => router.push('/onboarding/preferences')}
+          onPress={goNext}
           disabled={!selected.length}
         >
           <Text style={styles.buttonText}>Continue</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
 
-        <TouchableOpacity onPress={() => router.push('/onboarding/preferences')}>
+        <HapticTouchable onPress={goNext}>
           <Text style={styles.skipText}>Skip</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
       </View>
     </SafeAreaView>
   );
@@ -145,17 +150,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    justifyContent: 'center',
   },
   optionButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    paddingVertical: 11,
+    minHeight: 52,
+    paddingVertical: 8,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 7,
-    minWidth: '45%',
+    flexBasis: '100%', // every option is a full-width button
     borderWidth: 1,
     borderColor: '#E5E5EA',
     shadowColor: '#000',
@@ -163,6 +169,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
+  },
+  optionButtonWide: {
+    flexBasis: '100%',
   },
   optionButtonSelected: {
     backgroundColor: '#1C1C1E',
@@ -172,9 +181,10 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
   optionLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
+    flexShrink: 1,
   },
   footer: {
     position: 'absolute',
@@ -184,21 +194,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     paddingBottom: 40,
     backgroundColor: '#FAFAFA',
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 20,
-    gap: 6,
-  },
-  dot: {
-    width: 24,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#1C1C1E',
-  },
-  dotInactive: {
-    backgroundColor: '#D1D1D6',
   },
   button: {
     backgroundColor: '#1C1C1E',

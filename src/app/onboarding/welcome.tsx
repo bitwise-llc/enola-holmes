@@ -1,26 +1,127 @@
-import { router } from 'expo-router';
-import { StyleSheet, View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View, Text, Alert, ActivityIndicator, Dimensions } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { setOnboardingCompleted } from '../../utils/storage';
+import { onboardingAnswers } from '../../utils/onboardingAnswers';
 import { supabase } from '../../utils/supabase';
 import { identifyUser } from '../../utils/revenuecat';
-import { useState } from 'react';
+import Purchases from 'react-native-purchases';
+import { StaggerIn } from '../../components/stagger-in';
+import { Pagination } from '../../components/pagination';
+import { useState, useMemo, useEffect } from 'react';
+import * as StoreReview from 'expo-store-review';
+import Animated, {
+  useSharedValue,
+  useAnimatedRef,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation,
+  withDelay,
+  withTiming,
+  withRepeat,
+  withSequence,
+  Easing,
+  type SharedValue,
+} from 'react-native-reanimated';
+
+const REVIEWS = [
+  { text: 'finally found the information I needed. this app is amazing', author: 'Sarah M.' },
+  { text: 'dodged a total catfish thanks to Enola. worth every penny', author: 'Jessica R.' },
+  { text: 'super easy to use and the results were spot on', author: 'Megan T.' },
+  { text: 'gave me peace of mind before meeting someone new', author: 'Ashley K.' },
+  { text: 'wish I had this years ago. genuinely a lifesaver', author: 'Emily D.' },
+  { text: 'caught my match lying about their whole profile', author: 'Olivia P.' },
+  { text: 'fast, private, and it actually works', author: 'Rachel B.' },
+];
+
+const CARD_W = Math.min(Dimensions.get('window').width - 80, 320);
+const SPACING = 16;
+const SNAP = CARD_W + SPACING;
+
+const STAR_ROLL = 26; // matches the referral CodeBox counter-wheel travel
+
+// A single star that rolls in like the referral-code counter wheel: slides up + fades,
+// cubic ease-out, staggered by index so the row cascades left-to-right on mount.
+function Star({ index }: { index: number }) {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withDelay(200 + index * 90, withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }));
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [
+      { translateY: (1 - progress.value) * -STAR_ROLL },
+      { scale: 0.6 + progress.value * 0.4 },
+    ],
+  }));
+  return (
+    <Animated.View style={style}>
+      <Ionicons name="star" size={36} color="#F5B301" style={styles.star} />
+    </Animated.View>
+  );
+}
+
+function ReviewCard({ review, index, scrollX }: { review: typeof REVIEWS[number]; index: number; scrollX: SharedValue<number> }) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const pos = scrollX.value / SNAP - index;
+    const scale = interpolate(pos, [-1, 0, 1], [0.86, 1, 0.86], Extrapolation.CLAMP);
+    const rotateY = interpolate(pos, [-1, 0, 1], [35, 0, -35], Extrapolation.CLAMP);
+    const opacity = interpolate(pos, [-1, 0, 1], [0.55, 1, 0.55], Extrapolation.CLAMP);
+    return {
+      opacity,
+      transform: [{ perspective: 900 }, { scale }, { rotateY: `${rotateY}deg` }],
+    };
+  });
+
+  return (
+    <Animated.View style={[styles.testimonialCard, animatedStyle]}>
+      <Text style={styles.testimonial}>"{review.text}"</Text>
+      <Text style={styles.author}>— {review.author}</Text>
+    </Animated.View>
+  );
+}
 
 export default function WelcomeScreen() {
+  const { code } = useLocalSearchParams<{ code?: string }>();
   const [loading, setLoading] = useState(false);
+  const scrollX = useSharedValue(0);
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const scrollHandler = useAnimatedScrollHandler((e) => {
+    scrollX.value = e.contentOffset.x;
+  });
+  // Shuffle once per mount so the order feels fresh each time.
+  const reviews = useMemo(() => [...REVIEWS].sort(() => Math.random() - 0.5), []);
+
+  // The "Swipe" hint pulses left↔right to invite swiping (cards stay centered).
+  const hintX = useSharedValue(0);
+  useEffect(() => {
+    hintX.value = withDelay(
+      1200,
+      withRepeat(withSequence(withTiming(6, { duration: 600 }), withTiming(0, { duration: 600 })), -1, false)
+    );
+  }, []);
+  const hintStyle = useAnimatedStyle(() => ({ transform: [{ translateX: hintX.value }] }));
 
   const handleGetStarted = async () => {
     setLoading(true);
     console.log('Get Started clicked - creating user and profile');
 
+    // Ask for the App Store rating on tap. requestReview resolves once the user
+    // rates or dismisses ("Not Now"); either way we then finish onboarding below.
+    if (await StoreReview.hasAction()) {
+      await StoreReview.requestReview();
+    }
+
     try {
-      // Create account with auto-generated credentials
-      // Session is automatically persisted by Supabase in AsyncStorage
-      // Using different domains to avoid rate limits during testing
-      const domains = ['enola.app', 'test.local', 'demo.app', 'temp.dev'];
-      const randomDomain = domains[Math.floor(Math.random() * domains.length)];
-      const tempEmail = `user_${Date.now()}_${Math.random().toString(36).substring(7)}@${randomDomain}`;
-      const tempPassword = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      // Anonymous device account: auto-generated credentials on our own domain so the
+      // user gets a zero-friction start. Session is persisted by Supabase in AsyncStorage.
+      // High-entropy local part keeps addresses unique without collisions.
+      const unique = `${Date.now()}${Math.random().toString(36).slice(2, 10)}`;
+      const tempEmail = `user_${unique}@users.enola.app`;
+      const tempPassword = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: tempEmail,
@@ -49,6 +150,17 @@ export default function WelcomeScreen() {
 
       console.log('User account created:', userId);
 
+      // Read RevenueCat's anonymous device id BEFORE identifyUser() overwrites it
+      // with the Supabase uuid. This id lives in the keychain and survives an
+      // app reinstall, so the RPC uses it to grant the free coin only once per
+      // device. Best-effort: if it fails we just skip the guard for this signup.
+      let deviceId: string | null = null;
+      try {
+        deviceId = await Purchases.getAppUserID();
+      } catch (e) {
+        console.warn('Could not read RevenueCat device id:', e);
+      }
+
       // Tie RevenueCat to this Supabase user BEFORE they can reach the paywall/coin store.
       // Without this, a first purchase is attributed to RC's anonymous id and the webhook
       // can't map it to this profile — coins would be credited to nobody.
@@ -59,7 +171,8 @@ export default function WelcomeScreen() {
         .rpc('create_user_profile', {
           user_id: userId,
           user_email: tempEmail,
-          referral_code_used: null
+          referral_code_used: code || null,
+          device_id: deviceId
         });
 
       if (profileError) {
@@ -70,6 +183,23 @@ export default function WelcomeScreen() {
       }
 
       console.log('Profile created:', profileResult);
+
+      // An invalid code returns success:true, referral_applied:false (NOT a failure),
+      // so key off whether the code was actually applied — not success. Otherwise a
+      // bad code is silently ignored and the user is told nothing. already_redeemed is
+      // the only case we swallow (their account is fine; re-redeeming isn't allowed).
+      if (code && profileResult && profileResult.error !== 'already_redeemed' && !profileResult.referral_applied) {
+        Alert.alert('Invalid code', "That referral code didn't work, but your account is ready.");
+      }
+      // profile still exists (trigger + upsert guarantee it) — continue.
+
+      // Persist the questionnaire selections gathered before the account existed.
+      // Non-fatal: a failure here shouldn't block finishing onboarding.
+      const { error: answersError } = await supabase
+        .from('profiles')
+        .update({ onboarding_answers: onboardingAnswers })
+        .eq('id', userId);
+      if (answersError) console.error('Error saving onboarding answers:', answersError);
 
       // Mark onboarding complete in database and navigate
       await setOnboardingCompleted(userId);
@@ -84,48 +214,52 @@ export default function WelcomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
+        <HapticTouchable onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color="#007AFF" />
+        </HapticTouchable>
         <Text style={styles.logo}>Enola</Text>
       </View>
 
       <View style={styles.content}>
+        {/* Stars roll in with the referral counter-wheel animation, so they're rendered
+            directly (not inside StaggerIn, which would double up the entry). */}
         <View style={styles.starsContainer}>
-          <Text style={styles.star}>⭐</Text>
-          <Text style={styles.star}>⭐</Text>
-          <Text style={styles.star}>⭐</Text>
-          <Text style={styles.star}>⭐</Text>
-          <Text style={styles.star}>⭐</Text>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Star key={i} index={i} />
+          ))}
         </View>
 
-        <Text style={styles.title}>Help us Grow</Text>
-        <Text style={styles.subtitle}>A quick rating helps us reach more people.</Text>
-
-        <View style={styles.testimonialCard}>
-          <Text style={styles.testimonial}>
-            "finally found the information I needed. this app is amazing"
-          </Text>
-          <Text style={styles.author}>— Sarah M.</Text>
-        </View>
+        <StaggerIn delay={600}>
+          <Text style={styles.title}>Join 5,000+ Users</Text>
+          <Text style={styles.subtitle}>Be one of them — a quick rating helps us grow.</Text>
+        </StaggerIn>
       </View>
 
-      <View style={styles.footer}>
-        <View style={styles.pagination}>
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={styles.dot} />
-        </View>
+      <Animated.ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        snapToInterval={SNAP}
+        decelerationRate="fast"
+        contentContainerStyle={styles.carousel}
+        style={styles.carouselWrap}
+      >
+        {reviews.map((review, i) => (
+          <ReviewCard key={review.author} review={review} index={i} scrollX={scrollX} />
+        ))}
+      </Animated.ScrollView>
 
-        <TouchableOpacity
+      <Animated.View style={[styles.swipeHint, hintStyle]}>
+        <Text style={styles.swipeHintText}>Swipe for more</Text>
+        <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
+      </Animated.View>
+
+      <View style={styles.footer}>
+        <Pagination step={7} />
+
+        <HapticTouchable
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleGetStarted}
           activeOpacity={0.7}
@@ -136,7 +270,7 @@ export default function WelcomeScreen() {
           ) : (
             <Text style={styles.buttonText}>Get Started</Text>
           )}
-        </TouchableOpacity>
+        </HapticTouchable>
       </View>
     </SafeAreaView>
   );
@@ -172,8 +306,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   content: {
-    flex: 1,
-    justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: 40,
     paddingTop: 60,
@@ -192,6 +324,7 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     marginBottom: 10,
     letterSpacing: -0.8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 17,
@@ -199,18 +332,44 @@ const styles = StyleSheet.create({
     marginBottom: 36,
     fontWeight: '400',
     letterSpacing: -0.4,
+    textAlign: 'center',
+  },
+  carouselWrap: {
+    flexGrow: 0,
+  },
+  swipeHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  swipeHintText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontWeight: '500',
+    letterSpacing: -0.2,
+  },
+  carousel: {
+    // Center the first/last card in the viewport so snapping lands them mid-screen.
+    paddingHorizontal: (Dimensions.get('window').width - CARD_W) / 2,
+    alignItems: 'center',
+    paddingVertical: 20,
   },
   testimonialCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 24,
-    width: '100%',
+    width: CARD_W,
+    marginRight: SPACING,
+    minHeight: 160,
+    justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 5,
   },
   testimonial: {
     fontSize: 17,
@@ -235,21 +394,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     paddingBottom: 40,
     backgroundColor: '#FAFAFA',
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 20,
-    gap: 6,
-  },
-  dot: {
-    width: 24,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#1C1C1E',
-  },
-  dotInactive: {
-    backgroundColor: '#D1D1D6',
   },
   button: {
     backgroundColor: '#1C1C1E',

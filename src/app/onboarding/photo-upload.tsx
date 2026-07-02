@@ -1,7 +1,10 @@
 import { router } from 'expo-router';
-import { StyleSheet, View, Text, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, View, Text, Alert } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
+import { StaggerIn } from '../../components/stagger-in';
 
 export default function PhotoUploadScreen() {
   const pickImageFromGallery = async () => {
@@ -49,15 +52,9 @@ export default function PhotoUploadScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.leftIcons}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <HapticTouchable onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>⚙️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>🕐</Text>
-          </TouchableOpacity>
+          </HapticTouchable>
         </View>
 
         <Text style={styles.logo}>Enola</Text>
@@ -68,7 +65,7 @@ export default function PhotoUploadScreen() {
         </View>
       </View>
 
-      <View style={styles.content}>
+      <StaggerIn style={styles.content}>
         <View style={styles.speechBubble}>
           <Text style={styles.speechText}>
             Upload their photo,{'\n'}
@@ -78,28 +75,31 @@ export default function PhotoUploadScreen() {
         </View>
 
         <View style={styles.characterContainer}>
-          <Text style={styles.character}>🔍</Text>
+          <Ionicons name="search" size={40} color="#1C1C1E" />
         </View>
-      </View>
+      </StaggerIn>
 
       <View style={styles.footer}>
-        <TouchableOpacity
+        <HapticTouchable
           style={styles.cameraButton}
           onPress={takePhoto}
         >
-          <Text style={styles.buttonIcon}>📷</Text>
+          <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
           <Text style={styles.cameraButtonText}>Use Camera</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
 
-        <TouchableOpacity
+        <HapticTouchable
           style={styles.libraryButton}
           onPress={pickImageFromGallery}
         >
-          <Text style={styles.buttonIcon}>🖼️</Text>
+          <Ionicons name="images-outline" size={20} color="#1C1C1E" />
           <Text style={styles.libraryButtonText}>Photo Library</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
 
-        <Text style={styles.trustText}>🔒 Trusted for dating safety</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 8 }}>
+          <Ionicons name="lock-closed" size={12} color="#8E8E93" />
+          <Text style={[styles.trustText, { marginTop: 0 }]}>Trusted for dating safety</Text>
+        </View>
       </View>
     </SafeAreaView>
   );

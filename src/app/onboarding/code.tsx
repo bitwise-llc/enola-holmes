@@ -1,65 +1,144 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, TextInput } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, View, Text, TextInput, ActivityIndicator } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { StaggerIn } from '../../components/stagger-in';
+import { Pagination } from '../../components/pagination';
+import { CodeBox } from '../../components/code-box';
+import { supabase } from '@/utils/supabase';
+
+// Referral codes are 6 chars, A-Z0-9 (see UPDATE-REFERRAL-CODE-LENGTH.sql).
+const CODE_LENGTH = 6;
+const tickSound = require('../../../assets/sounds/counter-tick.m4a');
 
 export default function CodeScreen() {
   const [code, setCode] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null); // shown red + reddens boxes
+  const inputRef = useRef<TextInput>(null);
+  const player = useAudioPlayer(tickSound);
+
+  // Validate the code before advancing. A wrong code must NOT let the user through —
+  // only Skip does that. FAIL CLOSED: if we can't confirm the code is real (RPC
+  // missing, network down, anything), we block and say so — we never advance on an
+  // unverified code, or a random string would slip in. Codeless users use Skip.
+  const onRedeem = async () => {
+    if (code.length !== CODE_LENGTH || checking) return;
+    setChecking(true);
+    setErrorMsg(null);
+    try {
+      const { data, error: rpcError } = await supabase.rpc('referral_code_exists', { p_code: code });
+      if (rpcError) throw rpcError;
+      if (data === true) {
+        router.push({ pathname: '/paywall', params: { code } });
+      } else {
+        setErrorMsg("That code isn't valid. Check it, or tap Skip.");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } catch (e) {
+      // Couldn't verify — block rather than let an unchecked code through.
+      console.error('referral_code_exists failed:', e);
+      setErrorMsg("Couldn't check that code right now. Try again, or tap Skip.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  // Play the tick even when the phone is on silent/vibrate — it's UI feedback, not media.
+  useEffect(() => {
+    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+  }, []);
+
+  // One real (hidden) TextInput drives six display boxes. Using a single field means
+  // paste, autofill and backspace all "just work" — we only sanitize + cap the value.
+  const boxes = Array.from({ length: CODE_LENGTH }, (_, i) => code[i] ?? '');
+
+  // A box rolled a new character in — play the counter tick + a light haptic. Called
+  // once per newly-filled box, so a paste ticks rapidly across all filled boxes.
+  const onRoll = () => {
+    player.seekTo(0);
+    player.play();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
+        <HapticTouchable onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color="#007AFF" />
+        </HapticTouchable>
         <Text style={styles.logo}>Enola</Text>
       </View>
 
-      <View style={styles.content}>
+      <StaggerIn style={styles.content}>
         <View style={styles.giftIcon}>
-          <Text style={styles.gift}>🎁</Text>
+          <Ionicons name="gift-outline" size={90} color="#1C1C1E" />
         </View>
 
         <Text style={styles.title}>Got a Code?</Text>
         <Text style={styles.subtitle}>Redeem it for a free search</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Enter 6-digit code"
-          placeholderTextColor="#999"
-          value={code}
-          onChangeText={setCode}
-          maxLength={6}
-          keyboardType="number-pad"
-        />
-      </View>
+        <Pressable style={styles.boxesRow} onPress={() => inputRef.current?.focus()}>
+          {boxes.map((char, i) => {
+            // The "active" box is the first empty slot (or the last one when full).
+            const isActive = focused && (i === code.length || (code.length === CODE_LENGTH && i === CODE_LENGTH - 1));
+            return (
+              <CodeBox
+                key={i}
+                char={char}
+                active={isActive}
+                error={!!errorMsg}
+                flipDown={i % 2 === 0} // alternate roll direction per box
+                delay={i * 40} // cascade left-to-right on paste; small enough to not lag typing
+                onRoll={onRoll}
+              />
+            );
+          })}
+          {/* The real input, stretched invisibly over the boxes so taps focus it and the
+              caret/selection stay hidden. maxLength caps paste to 6 chars automatically. */}
+          <TextInput
+            ref={inputRef}
+            style={styles.hiddenInput}
+            value={code}
+            onChangeText={(t) => { setErrorMsg(null); setCode(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LENGTH)); }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            maxLength={CODE_LENGTH}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            keyboardType="default"
+            textContentType="oneTimeCode"
+            caretHidden
+          />
+        </Pressable>
+
+        {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+      </StaggerIn>
 
       <View style={styles.footer}>
-        <View style={styles.pagination}>
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={styles.dot} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-        </View>
+        <Pagination step={6} />
 
-        <TouchableOpacity
-          style={[styles.button, !code && styles.buttonDisabled]}
-          onPress={() => router.push('/onboarding/rating')}
-          disabled={!code}
+        <HapticTouchable
+          style={[styles.button, (code.length !== CODE_LENGTH || checking) && styles.buttonDisabled]}
+          onPress={onRedeem}
+          disabled={code.length !== CODE_LENGTH || checking}
         >
-          <Text style={styles.buttonText}>Redeem</Text>
-        </TouchableOpacity>
+          {checking ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.buttonText}>Redeem</Text>
+          )}
+        </HapticTouchable>
 
-        <TouchableOpacity onPress={() => router.push('/onboarding/rating')}>
+        <HapticTouchable onPress={() => router.push('/paywall')}>
           <Text style={styles.skipText}>Skip</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
       </View>
     </SafeAreaView>
   );
@@ -121,22 +200,28 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     letterSpacing: -0.4,
   },
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    fontSize: 18,
-    textAlign: 'center',
+  boxesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     width: '100%',
-    color: '#1C1C1E',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    gap: 8,
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 15,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 20,
+    letterSpacing: -0.2,
+  },
+  hiddenInput: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    // Absolute fill gives the invisible input the full row's hit area so taps focus it.
   },
   footer: {
     position: 'absolute',
@@ -146,21 +231,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     paddingBottom: 40,
     backgroundColor: '#FAFAFA',
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 20,
-    gap: 6,
-  },
-  dot: {
-    width: 24,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#1C1C1E',
-  },
-  dotInactive: {
-    backgroundColor: '#D1D1D6',
   },
   button: {
     backgroundColor: '#1C1C1E',

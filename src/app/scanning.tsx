@@ -3,21 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, Image as RNImage, Animated, Dimensions, Alert, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { uploadAsync } from 'expo-file-system/legacy';
-import { getCoinBalance, recordSearchAndDeductCoin } from '@/utils/searchService';
+import { getCoinBalance, recordSearch } from '@/utils/searchService';
+import { searchFace } from '@/utils/faceSearch';
 import { Image } from 'expo-image';
 import { Canvas, Circle as SkiaCircle, Group, useImage, Image as SkiaImage, Line as SkiaLine, Path, Skia } from '@shopify/react-native-skia';
+import { EnolaHeading } from '@/components/enola-heading';
 
 const { width, height } = Dimensions.get('window');
-const FACECHECK_API_TOKEN = 'UFSWdOlDdSa5BCOV6U3OpIi28UIjIO4tkYmOUVYNN4s1h3EQ956npx43IcU6qfdqiNjSPL3gz7Y=';
-const FACECHECK_SITE = 'https://facecheck.id';
-const TESTING_MODE = true; // Set to false for real results (uses API credits)
-
-// Face detection service URL
-// iOS Simulator: http://localhost:8000
-// Android Emulator: http://10.0.2.2:8000
-// Physical Device: http://YOUR_COMPUTER_IP:8000 (e.g., http://192.168.1.10:8000)
-const FACE_DETECTION_SERVICE_URL = 'http://localhost:8000';
 
 export default function ScanningScreen() {
   const { imageUri } = useLocalSearchParams<{ imageUri: string }>();
@@ -38,80 +30,22 @@ export default function ScanningScreen() {
   const radialPulse = useRef(new Animated.Value(0)).current;
   const cornerScale = useRef(new Animated.Value(0)).current;
 
-  const detectFace = async () => {
-    try {
-      console.log('🔍 Detecting facial landmarks using MediaPipe service');
-      console.log('📷 Image URI:', imageUri);
-
-      console.log('📤 Sending image to face detection service...');
-
-      // Use expo-file-system uploadAsync for proper multipart upload in React Native
-      // uploadType: 1 = MULTIPART
-      const uploadResponse = await uploadAsync(
-        `${FACE_DETECTION_SERVICE_URL}/detect-face`,
-        imageUri,
-        {
-          httpMethod: 'POST',
-          uploadType: 1,
-          fieldName: 'file',
-          mimeType: imageUri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg',
-        }
-      );
-
-      if (uploadResponse.status !== 200) {
-        throw new Error(`Face detection service error: ${uploadResponse.status}`);
-      }
-
-      const detectionData = JSON.parse(uploadResponse.body);
-      console.log('✅ Face detection response:', detectionData);
-      console.log('📊 Sample points:', JSON.stringify(detectionData.facialPoints.slice(0, 5), null, 2));
-
-      if (detectionData.faceDetected && detectionData.facialPoints.length > 0) {
-        console.log('🎯 Face detected! Found', detectionData.totalLandmarks, 'landmarks');
-
-        // Use the real detected landmarks
-        setFacialPoints(detectionData.facialPoints);
-        pointsOpacity.current = detectionData.facialPoints.map(() => new Animated.Value(0));
-
-        console.log('✅ Real facial landmarks loaded');
-        console.log('📍 First 3 points:', detectionData.facialPoints.slice(0, 3));
-      } else {
-        console.log('⚠️ No face detected, using fallback points');
-
-        // Fallback to default points if no face detected
-        const fallbackPoints = [
-          { x: 0.35, y: 0.3, type: 'eye' },
-          { x: 0.65, y: 0.3, type: 'eye' },
-          { x: 0.5, y: 0.45, type: 'nose' },
-          { x: 0.41, y: 0.58, type: 'mouth' },
-          { x: 0.59, y: 0.58, type: 'mouth' },
-          { x: 0.5, y: 0.62, type: 'mouth' },
-          { x: 0.32, y: 0.25, type: 'eyebrow' },
-          { x: 0.68, y: 0.25, type: 'eyebrow' },
-        ];
-
-        setFacialPoints(fallbackPoints);
-        pointsOpacity.current = fallbackPoints.map(() => new Animated.Value(0));
-      }
-
-    } catch (error) {
-      console.error('❌ Face detection error:', error);
-
-      // Use fallback points on error
-      const fallbackPoints = [
-        { x: 0.35, y: 0.3, type: 'eye' },
-        { x: 0.65, y: 0.3, type: 'eye' },
-        { x: 0.5, y: 0.45, type: 'nose' },
-        { x: 0.41, y: 0.58, type: 'mouth' },
-        { x: 0.59, y: 0.58, type: 'mouth' },
-        { x: 0.5, y: 0.62, type: 'mouth' },
-        { x: 0.32, y: 0.25, type: 'eyebrow' },
-        { x: 0.68, y: 0.25, type: 'eyebrow' },
-      ];
-
-      setFacialPoints(fallbackPoints);
-      pointsOpacity.current = fallbackPoints.map(() => new Animated.Value(0));
-    }
+  // Cosmetic scanning overlay: draws a grid of facial-landmark dots over the photo while
+  // the real search runs server-side. These are decorative reference points, not a face
+  // detector — the actual matching happens in the face-search Edge Function.
+  const showScanningOverlay = () => {
+    const points = [
+      { x: 0.35, y: 0.3, type: 'eye' },
+      { x: 0.65, y: 0.3, type: 'eye' },
+      { x: 0.5, y: 0.45, type: 'nose' },
+      { x: 0.41, y: 0.58, type: 'mouth' },
+      { x: 0.59, y: 0.58, type: 'mouth' },
+      { x: 0.5, y: 0.62, type: 'mouth' },
+      { x: 0.32, y: 0.25, type: 'eyebrow' },
+      { x: 0.68, y: 0.25, type: 'eyebrow' },
+    ];
+    setFacialPoints(points);
+    pointsOpacity.current = points.map(() => new Animated.Value(0));
   };
 
   const searchByFace = async () => {
@@ -140,139 +74,55 @@ export default function ScanningScreen() {
         return;
       }
 
-      if (TESTING_MODE) {
-        console.log('****** TESTING MODE search, results are inaccurate, and queue wait is long, but credits are NOT deducted ******');
-      }
-
       setSearchStatus('Uploading image...');
-      setActualProgress(5);
+      setActualProgress(10);
 
-      // Step 1: Upload image to FaceCheck.id using multipart form-data
-      // uploadType: 1 = MULTIPART (0 = BINARY)
-      const uploadResponse = await uploadAsync(
-        `${FACECHECK_SITE}/api/upload_pic`,
-        imageUri,
-        {
-          httpMethod: 'POST',
-          uploadType: 1,
-          fieldName: 'images',
-          mimeType: imageUri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg',
-          headers: {
-            'accept': 'application/json',
-            'Authorization': FACECHECK_API_TOKEN,
-          },
-        }
-      );
+      // Search runs entirely server-side (Edge Function holds the FaceCheck token and
+      // polls for results). We just await the final match list.
+      setSearchStatus('Searching faces...');
+      setActualProgress(40);
 
-      let uploadData;
-      try {
-        uploadData = JSON.parse(uploadResponse.body);
-      } catch (parseError) {
-        console.error('Failed to parse upload response:', uploadResponse.body);
-        throw new Error('Invalid response from server');
-      }
+      const result = await searchFace(imageUri);
 
-      if (uploadData?.error) {
-        // Handle specific API errors with user-friendly messages
-        if (uploadData?.code === 'IMAGE_ERROR') {
-          // Show user-friendly alert for no face detected
+      if (result.error) {
+        if (result.code === 'IMAGE_ERROR') {
           Alert.alert(
             'No Face Detected',
             'Please upload a clear photo with a visible face. Make sure the face is well-lit and not blurry.',
-            [
-              {
-                text: 'Try Another Photo',
-                onPress: () => router.replace('/(tabs)'),
-                style: 'default',
-              },
-            ]
+            [{ text: 'Try Another Photo', onPress: () => router.replace('/(tabs)'), style: 'default' }]
           );
-          return; // Exit the function early
-        }
-        // For other errors, throw to be caught by the catch block
-        throw new Error(uploadData.error);
-      }
-
-      const id_search = uploadData?.id_search;
-      if (!id_search) {
-        throw new Error('No search ID returned from server');
-      }
-      console.log('Upload successful. id_search=' + id_search);
-
-      setSearchStatus('Searching faces...');
-      setActualProgress(10);
-
-      // Step 2: Poll for search results
-      let attempts = 0;
-      const maxAttempts = 120; // 2 minutes max
-
-      while (attempts < maxAttempts) {
-        attempts++;
-
-        const searchResponse = await fetch(`${FACECHECK_SITE}/api/search`, {
-          method: 'POST',
-          headers: {
-            'accept': 'application/json',
-            'Authorization': FACECHECK_API_TOKEN,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            id_search: id_search,
-            with_progress: true,
-            status_only: false,
-            demo: TESTING_MODE,
-          }),
-        });
-
-        const searchData = await searchResponse.json();
-
-        if (searchData?.error) {
-          throw new Error(`${searchData.error} (${searchData.code || 'UNKNOWN'})`);
-        }
-
-        if (searchData?.output?.items) {
-          console.log(`Search complete! Found ${searchData.output.items.length} results`);
-          setSearchStatus('Found matches!');
-          setActualProgress(100);
-
-          // Record search and deduct coin
-          const recordResult = await recordSearchAndDeductCoin(
-            imageUri,
-            searchData.output.items.length,
-            searchData.output.items
-          );
-
-          if (!recordResult.success) {
-            console.error('Failed to record search:', recordResult.message);
-            // Still show results even if recording failed
-          } else {
-            console.log('Search recorded. New balance:', recordResult.new_balance);
-          }
-
-          // Navigate to results with real data
-          setTimeout(() => {
-            router.replace({
-              pathname: '/results',
-              params: {
-                imageUri,
-                resultsData: JSON.stringify(searchData.output.items),
-              },
-            });
-          }, 500);
           return;
         }
-
-        // Round progress and ensure it only increases
-        const newProgress = Math.round(searchData.progress || 0);
-        console.log(`Progress: ${newProgress}% - ${searchData.message}`);
-        setSearchStatus(`Searching... ${newProgress}%`);
-        setActualProgress(prev => Math.max(prev, newProgress));
-
-        // Wait 1 second before next poll
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // The Edge Function charges the coin server-side; it returns this if the balance
+        // is 0 (a scripted caller can't bypass it). Send the user to buy coins.
+        if (result.error === 'insufficient_coins') {
+          Alert.alert(
+            'Insufficient Coins',
+            'You need at least 1 coin to perform a search. Please purchase more coins.',
+            [
+              { text: 'Buy Coins', onPress: () => router.replace('/coins'), style: 'default' },
+              { text: 'Cancel', onPress: () => router.back(), style: 'cancel' },
+            ]
+          );
+          return;
+        }
+        throw new Error(result.error);
       }
 
-      throw new Error('Search timed out after 2 minutes');
+      const items = result.items ?? [];
+      console.log(`Search complete! Found ${items.length} results`);
+      setSearchStatus('Found matches!');
+      setActualProgress(100);
+
+      // Save to history only — the coin was already deducted server-side by the function.
+      await recordSearch(imageUri, items.length, items);
+
+      setTimeout(() => {
+        router.replace({
+          pathname: '/results',
+          params: { imageUri, resultsData: JSON.stringify(items) },
+        });
+      }, 500);
 
     } catch (error: any) {
       console.error('Face search error:', error);
@@ -341,8 +191,8 @@ export default function ScanningScreen() {
       }
     );
 
-    // Detect face first
-    detectFace();
+    // Show the cosmetic scanning overlay
+    showScanningOverlay();
 
     // Start the face search
     searchByFace();
@@ -500,7 +350,7 @@ export default function ScanningScreen() {
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.logo}>Enola</Text>
+            <EnolaHeading style={styles.logo} />
             <View style={styles.statusBadge}>
               <View style={styles.statusDot} />
               <Text style={styles.statusText}>Scanning</Text>
@@ -791,7 +641,7 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
   scanOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(14, 165, 233, 0.03)',
   },
   radialPulse: {

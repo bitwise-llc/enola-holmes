@@ -1,51 +1,43 @@
 import { router } from 'expo-router';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View, Text } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StaggerIn } from '../../components/stagger-in';
+import { Pagination } from '../../components/pagination';
 
 export default function PrivacyScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
+        <HapticTouchable onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color="#007AFF" />
+        </HapticTouchable>
         <Text style={styles.logo}>Enola</Text>
       </View>
 
-      <View style={styles.content}>
+      <StaggerIn style={styles.content}>
         <View style={styles.iconContainer}>
-          <Text style={styles.icon}>🔒</Text>
+          <Ionicons name="lock-closed-outline" size={56} color="#1C1C1E" />
         </View>
 
-        <Text style={styles.title}>Your Privacy is Guaranteed</Text>
+        <Text style={styles.title}>Your Privacy Matters</Text>
 
         <Text style={styles.description}>
-          We don't collect personal data, maintain databases, or store any user information.
-          Your searches remain completely private and anonymous.
+          Your searches are tied to your account and kept private — never sold or shared with
+          advertisers. You can delete your account and all your data anytime from Settings.
         </Text>
-      </View>
+      </StaggerIn>
 
       <View style={styles.footer}>
-        <View style={styles.pagination}>
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={styles.dot} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-        </View>
+        <Pagination step={2} />
 
-        <TouchableOpacity
+        <HapticTouchable
           style={styles.button}
           onPress={() => router.push('/onboarding/how-found')}
         >
           <Text style={styles.buttonText}>Continue</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
       </View>
     </SafeAreaView>
   );
@@ -130,21 +122,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     paddingBottom: 40,
     backgroundColor: '#FAFAFA',
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 20,
-    gap: 6,
-  },
-  dot: {
-    width: 24,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#1C1C1E',
-  },
-  dotInactive: {
-    backgroundColor: '#D1D1D6',
   },
   button: {
     backgroundColor: '#1C1C1E',
