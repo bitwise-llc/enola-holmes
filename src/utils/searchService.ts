@@ -1,14 +1,5 @@
 import { supabase } from './supabase';
 
-export interface RecordSearchResult {
-  success: boolean;
-  error?: string;
-  message?: string;
-  search_id?: string;
-  new_balance?: number;
-  current_balance?: number;
-}
-
 /**
  * Get current logged-in user ID
  */
@@ -41,56 +32,29 @@ export async function getCoinBalance(): Promise<number> {
 }
 
 /**
- * Record a search and deduct one coin
+ * Save a search to history. Does NOT deduct a coin — the face-search Edge Function
+ * already charged it server-side. Plain insert; the "insert own searches" RLS policy
+ * scopes it to the current user. Best-effort: a failed insert must not block results.
  */
-export async function recordSearchAndDeductCoin(
+export async function recordSearch(
   imageUrl: string,
   resultsCount: number,
   resultsData: any[]
-): Promise<RecordSearchResult> {
+): Promise<void> {
   const userId = await getCurrentUserId();
-  if (!userId) {
-    return {
-      success: false,
-      error: 'not_authenticated',
-      message: 'Please log in to perform searches.',
-    };
-  }
-  try {
-    // Limit the results data to avoid "message too long" error
-    // Only keep essential fields and limit to first 10 results
-    const trimmedResults = resultsData.slice(0, 10).map(item => ({
-      url: item.url,
-      score: item.score,
-      title: item.title || '',
-      // Remove large fields like images, thumbnails, etc.
-    }));
-
-    const { data, error } = await supabase.rpc('record_search_and_deduct_coin', {
-      p_user_id: userId,
-      p_image_url: imageUrl,
-      p_results_count: resultsCount,
-      p_results_data: trimmedResults,
-    });
-
-    if (error) {
-      console.error('Error recording search:', error);
-      return {
-        success: false,
-        error: 'database_error',
-        message: 'Failed to record search. Please try again.',
-      };
-    }
-
-    return data as RecordSearchResult;
-  } catch (error) {
-    console.error('Exception recording search:', error);
-    return {
-      success: false,
-      error: 'exception',
-      message: 'An unexpected error occurred. Please try again.',
-    };
-  }
+  if (!userId) return;
+  const trimmedResults = resultsData.slice(0, 10).map(item => ({
+    url: item.url,
+    score: item.score,
+    title: item.title || '',
+  }));
+  const { error } = await supabase.from('searches').insert({
+    user_id: userId,
+    image_url: imageUrl,
+    results_count: resultsCount,
+    results: trimmedResults,
+  });
+  if (error) console.error('recordSearch:', error);
 }
 
 /**

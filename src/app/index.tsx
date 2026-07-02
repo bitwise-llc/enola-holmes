@@ -1,16 +1,72 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, View, Text, ActivityIndicator, Alert, Animated, Easing, Image } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
+import Reanimated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MagnifyingGlass } from '../components/magnifying-glass';
+import { OnlyFansIcon } from '../components/onlyfans-icon';
 import { hasCompletedOnboarding, resetOnboarding } from '../utils/storage';
 import { supabase } from '../utils/supabase';
 
+// The three intro "pages" are now phases of one screen. The mascot stays put;
+// only the block below it swaps.
+const findItems = [
+  { text: 'Criminal Record', icon: 'shield-checkmark-outline' },
+  { text: 'OnlyFans', icon: 'onlyfans' },
+  { text: 'LinkedIn', icon: 'briefcase-outline' },
+  { text: 'Hidden TikToks', icon: 'logo-tiktok' },
+];
+const ITEM_STAGGER = 400; // ms between each band appearing
+
+// Mascot + glass geometry, measured from the 1106px source `enola-nolens.png`, in which
+// Enola's raised fist grips a short VERTICAL handle stub with no lens (grip column x~638,
+// handle visible y~353..405 px). The hand-free vector glass supplies lens + full handle;
+// we sink its handle into that same fist so HER fingers wrap it, lens resting above.
+const MASCOT = 260;
+const SRC = 1106;
+const S = MASCOT / SRC; // source px -> display px
+// Where the vector lens should rest, and the grip column it must line up with (source px).
+const LENS_CX = 638 * S; // same column as her fist/handle
+const LENS_CY = 258 * S; // above the fist so the lens sits over the raised hand
+const LENS_R = 40 * S;   // natural glass size relative to the mascot
+// MagnifyingGlass viewBox is 100x260: lens center (50,50) r32, handle vertical on x=50.
+// Scale so the SVG lens radius (32/100 of width) equals LENS_R, then align lens center.
+const GLASS_W = LENS_R / 0.32;
+const GLASS_H = GLASS_W * 2.6;
+const GLASS_LEFT = LENS_CX - 0.50 * GLASS_W;        // SVG lens/handle at x=50 (0.50 of width)
+const GLASS_TOP = LENS_CY - (50 / 260) * GLASS_H;   // SVG lens center at y=50 of 260
+// At t=0 the glass is lifted up and slightly out, then eases down into her fist.
+const GLASS_FLY_X = 10;
+const GLASS_FLY_Y = -40;
+
 export default function HomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
+  // 'landing' -> 'find' -> 'photo' -> navigate to onboarding. The mascot never moves.
+  const [phase, setPhase] = useState<'landing' | 'find' | 'photo'>('landing');
+  // Magnifying glass zooms out from big-and-centered into its resting place above the title.
+  const glass = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     checkAuthAndOnboarding();
   }, []);
+
+  // Once the landing shows: hold the big magnifying glass over the whole page for half a
+  // second, then smoothly zoom it out until it submerges into Enola's (empty) hand.
+  useEffect(() => {
+    if (isLoading) return;
+    glass.setValue(0);
+    Animated.sequence([
+      Animated.delay(500),
+      Animated.timing(glass, {
+        toValue: 1,
+        duration: 1100,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isLoading]);
 
   const checkAuthAndOnboarding = async () => {
     try {
@@ -50,8 +106,22 @@ export default function HomeScreen() {
 
   const handleGetStarted = () => {
     console.log('Get Started pressed');
-    router.push('/onboarding/find-their');
+    setPhase('find');
   };
+
+  // Drive the intro phases on a timer; the mascot stays fixed the whole time.
+  useEffect(() => {
+    if (phase === 'find') {
+      // Wait for all bands to stagger in, then move on.
+      const total = 400 + findItems.length * ITEM_STAGGER + 900;
+      const t = setTimeout(() => setPhase('photo'), total);
+      return () => clearTimeout(t);
+    }
+    if (phase === 'photo') {
+      const t = setTimeout(() => router.replace('/onboarding/stats'), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
 
   if (isLoading) {
     return (
@@ -84,22 +154,99 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <TouchableOpacity
-          onLongPress={handleResetOnboarding}
-          delayLongPress={2000}
-        >
-          <Text style={styles.logo}>Enola</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Welcome to Enola</Text>
-        <Text style={styles.subtitle}>Your personal search assistant</Text>
+        <View style={styles.mascotBox}>
+          {/* The mascot with an EMPTY hand — no glass in it while the animation plays,
+              so there's never a double glass. The flying vector glass below becomes the
+              one she holds once it settles. */}
+          <Image
+            source={require('../../assets/images/enola-nolens.png')}
+            resizeMode="contain"
+            style={styles.mascot}
+          />
+          {/* A hand-free glass: lens + full handle only. Starts lifted & a bit bigger, then
+              eases down until its full handle sinks into her fist and stays gripped. */}
+          <Animated.View
+            style={[
+              styles.glass,
+              {
+                transform: [
+                  { translateX: glass.interpolate({ inputRange: [0, 1], outputRange: [GLASS_FLY_X, 0] }) },
+                  { translateY: glass.interpolate({ inputRange: [0, 1], outputRange: [GLASS_FLY_Y, 0] }) },
+                  { scale: glass.interpolate({ inputRange: [0, 1], outputRange: [2.2, 1] }) },
+                  { rotate: glass.interpolate({ inputRange: [0, 1], outputRange: ['-8deg', '0deg'] }) },
+                ],
+              },
+            ]}
+          >
+            <MagnifyingGlass size={GLASS_W} />
+          </Animated.View>
+        </View>
 
-        <TouchableOpacity
-          style={styles.button}
-          onPress={handleGetStarted}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.buttonText}>Get Started</Text>
-        </TouchableOpacity>
+        {/* Everything below the mascot swaps per phase; the mascot above never moves.
+            A fixed-height box reserves the space so nothing re-centers between phases. */}
+        <View style={styles.phaseBox}>
+          {phase === 'landing' && (
+            <Reanimated.View
+              key="landing"
+              entering={FadeIn.duration(300)}
+              exiting={FadeOut.duration(200)}
+              style={styles.phaseCenter}
+            >
+              <HapticTouchable onLongPress={handleResetOnboarding} delayLongPress={2000}>
+                <Text style={styles.logo}>
+                  <Text style={styles.greeting}>Hi, I&apos;m </Text>Enola
+                </Text>
+              </HapticTouchable>
+              <Text style={styles.subtitle}>Your personal search assistant</Text>
+
+              <HapticTouchable style={styles.button} onPress={handleGetStarted} activeOpacity={0.7}>
+                <Text style={styles.buttonText}>Get Started</Text>
+              </HapticTouchable>
+            </Reanimated.View>
+          )}
+
+          {phase === 'find' && (
+            <Reanimated.View
+              key="find"
+              entering={FadeIn.duration(300)}
+              exiting={FadeOut.duration(200)}
+              style={styles.phaseCenter}
+            >
+              <Text style={styles.title}>Find their...</Text>
+              <View style={styles.itemsList}>
+                {findItems.map((item, index) => (
+                  <Reanimated.View
+                    key={index}
+                    entering={FadeInDown.delay(400 + index * ITEM_STAGGER).duration(450)}
+                    style={styles.item}
+                  >
+                    <Text style={styles.itemText}>{item.text}</Text>
+                    {item.icon === 'onlyfans' ? (
+                      <OnlyFansIcon size={24} color="#1C1C1E" />
+                    ) : (
+                      <Ionicons name={item.icon as any} size={24} color="#1C1C1E" />
+                    )}
+                  </Reanimated.View>
+                ))}
+              </View>
+            </Reanimated.View>
+          )}
+
+          {phase === 'photo' && (
+            <Reanimated.View
+              key="photo"
+              entering={FadeIn.duration(400)}
+              style={styles.phaseCenter}
+            >
+              <Text style={styles.title}>
+                Find their entire{'\n'}online presence
+              </Text>
+              <Text style={styles.photoSubtitle}>
+                all from <Text style={styles.accent}>ONE</Text> photo.
+              </Text>
+            </Reanimated.View>
+          )}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -116,20 +263,82 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
   },
+  mascotBox: {
+    width: MASCOT,
+    height: MASCOT,
+    marginBottom: 16,
+  },
+  // Fixed-height area under the mascot so swapping phase content never shifts the mascot.
+  phaseBox: {
+    height: 260,
+    width: '100%',
+  },
+  phaseCenter: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 8,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000000',
+    textAlign: 'center',
+    lineHeight: 36,
+    marginBottom: 24,
+  },
+  itemsList: {
+    alignSelf: 'center',
+    alignItems: 'flex-start',
+    gap: 18,
+  },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  itemText: {
+    fontSize: 24,
+    fontWeight: '500',
+    color: '#9E9E9E',
+  },
+  photoSubtitle: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#000000',
+    textAlign: 'center',
+  },
+  accent: {
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
+  },
+  mascot: {
+    position: 'absolute',
+    width: MASCOT,
+    height: MASCOT,
+  },
+  glass: {
+    position: 'absolute',
+    left: GLASS_LEFT,
+    top: GLASS_TOP,
+    width: GLASS_W,
+    height: GLASS_H,
+  },
   logo: {
     fontSize: 32,
     fontWeight: '600',
     color: '#1C1C1E',
     marginBottom: 16,
     letterSpacing: -0.8,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1C1C1E',
-    marginBottom: 8,
     textAlign: 'center',
-    letterSpacing: -0.6,
+  },
+  greeting: {
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   subtitle: {
     fontSize: 14,

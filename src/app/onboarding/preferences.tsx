@@ -1,25 +1,32 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StaggerIn } from '../../components/stagger-in';
+import { Pagination } from '../../components/pagination';
+import { OnlyFansIcon } from '../../components/onlyfans-icon';
+import { onboardingAnswers } from '../../utils/onboardingAnswers';
 
 type Option = {
   id: string;
   icon: string;
   label: string;
+  wide?: boolean; // spans the full row instead of sharing a column
 };
 
 const options: Option[] = [
-  { id: 'criminal', icon: '👮', label: 'Criminal record' },
-  { id: 'web', icon: '🌐', label: 'Web article' },
-  { id: 'twitter', icon: '𝕏', label: 'X / Twitter' },
-  { id: 'instagram', icon: '📷', label: 'Instagram' },
-  { id: 'tiktok', icon: '🎵', label: 'TikTok' },
-  { id: 'youtube', icon: '▶️', label: 'YouTube' },
-  { id: 'facebook', icon: '👥', label: 'Facebook' },
-  { id: 'onlyfans', icon: '💙', label: 'OnlyFans' },
-  { id: 'other', icon: '📋', label: 'Other' },
-  { id: 'prefer', icon: '😶', label: 'Prefer not to say' },
+  { id: 'criminal', icon: 'shield-checkmark-outline', label: 'Criminal record', wide: true },
+  { id: 'web', icon: 'globe-outline', label: 'Web article' },
+  { id: 'twitter', icon: 'logo-twitter', label: 'X / Twitter' },
+  { id: 'instagram', icon: 'logo-instagram', label: 'Instagram' },
+  { id: 'tiktok', icon: 'logo-tiktok', label: 'TikTok' },
+  { id: 'youtube', icon: 'logo-youtube', label: 'YouTube' },
+  { id: 'facebook', icon: 'logo-facebook', label: 'Facebook' },
+  { id: 'onlyfans', icon: 'diamond-outline', label: 'OnlyFans' },
+  { id: 'other', icon: 'ellipsis-horizontal-circle-outline', label: 'Other' },
+  { id: 'prefer', icon: 'help-circle-outline', label: 'Prefer not to say', wide: true },
 ];
 
 export default function PreferencesScreen() {
@@ -33,64 +40,67 @@ export default function PreferencesScreen() {
     }
   };
 
+  const goNext = () => {
+    onboardingAnswers.beneficialResults = selected;
+    router.push('/onboarding/code');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
+        <HapticTouchable onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color="#007AFF" />
+        </HapticTouchable>
         <Text style={styles.logo}>Enola</Text>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        <StaggerIn>
         <Text style={styles.title}>What result would be most beneficial?</Text>
 
         <View style={styles.optionsGrid}>
           {options.map((option) => (
-            <TouchableOpacity
+            <HapticTouchable
               key={option.id}
               style={[
                 styles.optionButton,
+                option.wide && styles.optionButtonWide,
                 selected.includes(option.id) && styles.optionButtonSelected,
               ]}
               onPress={() => toggleOption(option.id)}
             >
-              <Text style={styles.optionIcon}>{option.icon}</Text>
-              <Text style={[
-                styles.optionLabel,
-                { color: selected.includes(option.id) ? '#FFF' : '#000' }
-              ]}>{option.label}</Text>
-            </TouchableOpacity>
+              {option.id === 'onlyfans' ? (
+                <OnlyFansIcon size={17} color={selected.includes(option.id) ? '#FFF' : '#1C1C1E'} />
+              ) : (
+                <Ionicons name={option.icon as any} size={17} color={selected.includes(option.id) ? '#FFF' : '#1C1C1E'} />
+              )}
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.optionLabel,
+                  { color: selected.includes(option.id) ? '#FFF' : '#000' }
+                ]}
+              >{option.label}</Text>
+            </HapticTouchable>
           ))}
         </View>
+        </StaggerIn>
       </ScrollView>
 
       <View style={styles.footer}>
-        <View style={styles.pagination}>
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={styles.dot} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-        </View>
+        <Pagination step={5} />
 
-        <TouchableOpacity
+        <HapticTouchable
           style={[styles.button, !selected.length && styles.buttonDisabled]}
-          onPress={() => router.push('/onboarding/code')}
+          onPress={goNext}
           disabled={!selected.length}
         >
           <Text style={styles.buttonText}>Continue</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
 
-        <TouchableOpacity onPress={() => router.push('/onboarding/code')}>
+        <HapticTouchable onPress={goNext}>
           <Text style={styles.skipText}>Skip</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
       </View>
     </SafeAreaView>
   );
@@ -145,17 +155,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    justifyContent: 'center',
   },
   optionButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    paddingVertical: 11,
+    height: 52,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 7,
-    minWidth: '45%',
+    flexBasis: '48%',
+    flexGrow: 1,
     borderWidth: 1,
     borderColor: '#E5E5EA',
     shadowColor: '#000',
@@ -163,6 +174,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
+  },
+  optionButtonWide: {
+    flexBasis: '100%',
   },
   optionButtonSelected: {
     backgroundColor: '#1C1C1E',
@@ -172,9 +186,10 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
   optionLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
+    flexShrink: 1,
   },
   footer: {
     position: 'absolute',
@@ -184,21 +199,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     paddingBottom: 40,
     backgroundColor: '#FAFAFA',
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 20,
-    gap: 6,
-  },
-  dot: {
-    width: 24,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#1C1C1E',
-  },
-  dotInactive: {
-    backgroundColor: '#D1D1D6',
   },
   button: {
     backgroundColor: '#1C1C1E',

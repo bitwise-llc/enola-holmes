@@ -8,7 +8,7 @@
     "scheme": "enola",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.tkejriwal.EnolaNew",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -22,9 +22,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ],
+      "permissions": [],
       "package": "com.tkejriwal.EnolaNew"
     },
     "web": {
@@ -36,7 +34,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#FAFAFA",
           "image": "./assets/images/enola-headhshot.png",
           "imageWidth": 200,
           "resizeMode": "contain",
@@ -55,8 +53,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app needs access to your photos to upload images.",
-          "cameraPermission": "The app needs access to your camera to take photos."
+          "photosPermission": "Enola needs access to your photos so you can choose a picture of a person to run a reverse face search.",
+          "cameraPermission": "Enola needs access to your camera so you can take a photo of a person to run a reverse face search."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false
         }
       ]
     ],

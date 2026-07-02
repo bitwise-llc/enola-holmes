@@ -1,33 +1,37 @@
-import { router } from 'expo-router';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { router, Stack } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View, Text } from 'react-native';
+import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StaggerIn } from '../../components/stagger-in';
+import { Pagination } from '../../components/pagination';
 
 export default function StatsScreen() {
   return (
     <SafeAreaView style={styles.container}>
+      {/* First screen after onboarding — no back button, and the swipe-back gesture
+          is disabled so the user can't return to the intro once they've entered. */}
+      <Stack.Screen options={{ gestureEnabled: false }} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
         <Text style={styles.logo}>Enola</Text>
-        <Text style={styles.settingsButton}>⚙️</Text>
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <View style={styles.content}>
+        <StaggerIn>
         <View style={styles.iconsRow}>
-          <Text style={styles.platformIcon}>🐝</Text>
-          <Text style={styles.platformIcon}>🔥</Text>
-          <Text style={styles.platformIcon}>💬</Text>
+          <Ionicons name="heart-outline" size={38} color="#1C1C1E" />
+          <Ionicons name="alert-circle-outline" size={38} color="#1C1C1E" />
+          <Ionicons name="shield-checkmark-outline" size={38} color="#1C1C1E" />
         </View>
 
-        <Text style={styles.mainTitle}>The Reality of Online Dating...</Text>
+        <Text style={styles.mainTitle}>The Reality of Online Dating</Text>
 
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>1 in 3</Text>
           <Text style={styles.statDescription}>
             people have met someone online who wasn't who they claimed to be.
           </Text>
-          <Text style={styles.statSource}>Pew Research Center</Text>
+          <Text style={styles.statSource}>~ Pew Research Center</Text>
         </View>
 
         <View style={styles.statCard}>
@@ -35,7 +39,7 @@ export default function StatsScreen() {
           <Text style={styles.statDescription}>
             of online daters admit to lying on their profiles about age, appearance, or relationship status.
           </Text>
-          <Text style={styles.statSource}>Journal of Communication</Text>
+          <Text style={styles.statSource}>~ Journal of Communication</Text>
         </View>
 
         <View style={styles.statCard}>
@@ -43,31 +47,20 @@ export default function StatsScreen() {
           <Text style={styles.statDescription}>
             of users don't research their dates before meeting them in person.
           </Text>
-          <Text style={styles.statSource}>Social Catfish Survey</Text>
+          <Text style={styles.statSource}>~ Social Catfish Survey</Text>
         </View>
-      </ScrollView>
+        </StaggerIn>
+      </View>
 
       <View style={styles.footer}>
-        <View style={styles.pagination}>
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={styles.dot} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-          <View style={[styles.dot, styles.dotInactive]} />
-        </View>
+        <Pagination step={1} />
 
-        <TouchableOpacity
+        <HapticTouchable
           style={styles.button}
           onPress={() => router.push('/onboarding/privacy')}
         >
           <Text style={styles.buttonText}>Next</Text>
-        </TouchableOpacity>
+        </HapticTouchable>
       </View>
     </SafeAreaView>
   );
@@ -86,19 +79,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
   },
-  backButton: {
-    position: 'absolute',
-    left: 16,
-    padding: 8,
-  },
-  backButtonText: {
-    fontSize: 28,
-    color: '#007AFF',
-    fontWeight: '300',
-  },
-  scrollView: {
-    backgroundColor: '#FAFAFA',
-  },
   logo: {
     fontSize: 20,
     fontWeight: '600',
@@ -111,9 +91,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   content: {
+    flex: 1,
     paddingHorizontal: 40,
     paddingTop: 20,
-    paddingBottom: 20,
+    paddingBottom: 140, // clear the absolute footer (pagination + button)
   },
   iconsRow: {
     flexDirection: 'row',
@@ -164,21 +145,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     paddingBottom: 40,
     backgroundColor: '#FAFAFA',
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 20,
-    gap: 6,
-  },
-  dot: {
-    width: 24,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#1C1C1E',
-  },
-  dotInactive: {
-    backgroundColor: '#D1D1D6',
   },
   button: {
     backgroundColor: '#1C1C1E',
