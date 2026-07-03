@@ -65,14 +65,13 @@ export default function HomeScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
+      // No allowsEditing: iOS locks it to a 1:1 square. We do free four-side crop in /crop.
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets[0]) {
       router.push({
-        pathname: '/scanning',
+        pathname: '/crop',
         params: { imageUri: result.assets[0].uri },
       });
     }
@@ -87,14 +86,12 @@ export default function HomeScreen() {
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets[0]) {
       router.push({
-        pathname: '/scanning',
+        pathname: '/crop',
         params: { imageUri: result.assets[0].uri },
       });
     }
