@@ -1,5 +1,4 @@
-import { router, useFocusEffect } from 'expo-router';
-import { useState, useCallback } from 'react';
+import { router } from 'expo-router';
 import { StyleSheet, View, Text, Alert, Linking } from 'react-native';
 // expo-image decodes the large (1.8MB) headshot PNG reliably on device; RN's Image
 // rendered it in the simulator but left it blank on physical devices.
@@ -8,48 +7,15 @@ import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '@/utils/supabase';
 import { EnolaHeading } from '@/components/enola-heading';
 import { LEGAL_URLS } from '@/components/subscription-disclosure';
+import { useProfile } from '@/utils/useRealtime';
 
 export default function HomeScreen() {
-  const [coins, setCoins] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [referral, setReferral] = useState<{ code: string; count: number } | null>(null);
-
-  // Reload coins every time the screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      loadUserCoins();
-    }, [])
-  );
-
-  const loadUserCoins = async () => {
-    try {
-      // Get the current user's session
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        console.log('No session found - using default coins');
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('coins, referral_code, referral_count')
-        .eq('id', session.user.id)
-        .single();
-
-      if (error) {
-        console.error('Error loading coins:', error);
-      } else if (data) {
-        setCoins(data.coins);
-        setReferral({ code: data.referral_code ?? '', count: data.referral_count ?? 0 });
-      }
-    } catch (error) {
-      console.error('Error loading coins:', error);
-    }
-  };
+  // Live balance + referral — updates on screen the moment they change server-side.
+  const profile = useProfile();
+  const coins = profile?.coins ?? null;
+  const referral = profile ? { code: profile.code, count: profile.count } : null;
 
   // Coins are deducted only in scanning.tsx via record_search_and_deduct_coin, tied to a
   // completed search. This screen only displays the balance — no spend here, or it would

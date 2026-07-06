@@ -26,6 +26,26 @@ export const getReferralInfo = async (): Promise<{ code: string; count: number }
   return { code: data?.referral_code ?? '', count: data?.referral_count ?? 0 };
 };
 
+export type CoinTransaction = {
+  id: string;
+  amount: number;   // +credit / -spend
+  reason: string;   // 'scan' | 'purchase' | 'referral_bonus' | 'signup_bonus' | ...
+  created_at: string;
+};
+
+// Full coin ledger for the signed-in user, newest first. RLS ("own txns") scopes
+// it to the caller, so a plain select is safe. Returns [] if no session/error.
+export const getCoinTransactions = async (): Promise<CoinTransaction[]> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return [];
+  const { data, error } = await supabase
+    .from('coin_transactions')
+    .select('id, amount, reason, created_at')
+    .order('created_at', { ascending: false });
+  if (error) { console.error('getCoinTransactions:', error); return []; }
+  return data ?? [];
+};
+
 // Atomic spend via RPC. Returns the new balance, or null if insufficient/failed.
 // No read-then-write in JS — Postgres does the check+deduct in one row update.
 export const spendCoin = async (amount = 1): Promise<number | null> => {
