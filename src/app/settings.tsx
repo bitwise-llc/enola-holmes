@@ -4,49 +4,19 @@ import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/utils/supabase';
-import { useState, useEffect } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import * as StoreReview from 'expo-store-review';
 import { LEGAL_URLS } from '@/components/subscription-disclosure';
+import { useProfile } from '@/utils/useRealtime';
 
 export default function SettingsScreen() {
   const params = useLocalSearchParams<{ code?: string; count?: string }>();
-  const [referralCode, setReferralCode] = useState(params.code ?? '');
-  const [referralCount, setReferralCount] = useState(Number(params.count ?? 0));
-  const [loading, setLoading] = useState(!params.code);
-
-  useEffect(() => {
-    if (!params.code) loadReferralInfo(); // params already have it — no fetch, no pop-in
-  }, []);
-
-  const loadReferralInfo = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        setLoading(false);
-        return;
-      }
-
-      // Query profiles table directly instead of using RPC
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('referral_code, referral_count')
-        .eq('id', session.user.id)
-        .single();
-
-      if (error) {
-        console.error('Error loading referral info:', error);
-      } else if (data) {
-        setReferralCode(data.referral_code || '');
-        setReferralCount(data.referral_count || 0);
-      }
-    } catch (error) {
-      console.error('Error loading referral info:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Live profile drives the values; nav params seed the first paint so there's no
+  // pop-in when arriving from the coins screen. The hook wins once it resolves.
+  const profile = useProfile();
+  const referralCode = profile?.code ?? params.code ?? '';
+  const referralCount = profile?.count ?? Number(params.count ?? 0);
+  const loading = !profile && !params.code; // nothing to show from either source yet
 
   const handleShareReferral = async () => {
     if (!referralCode) return;
@@ -57,7 +27,9 @@ export default function SettingsScreen() {
         title: 'Join Enola',
       });
     } catch (error) {
+      // A share cancel isn't an error; only surface genuine failures.
       console.error('Error sharing:', error);
+      Alert.alert('Unavailable', "Couldn't open the share sheet. Copy your code instead.");
     }
   };
 
@@ -88,9 +60,8 @@ export default function SettingsScreen() {
       // Open native in-app review prompt
       await StoreReview.requestReview();
     } else {
-      // Fallback to App Store URL if review prompt not available
-      // TODO: replace with the real listing URL (https://apps.apple.com/app/<name>/id<APP_ID>)
-      openUrl('https://apps.apple.com/app/enola');
+      // Fallback to App Store review composer if the native prompt isn't available.
+      openUrl('https://apps.apple.com/app/id6781339006?action=write-review');
     }
   };
 
@@ -165,16 +136,19 @@ export default function SettingsScreen() {
                 Get 1 coin for every person who uses your code
               </Text>
 
-              <View style={styles.codeContainer}>
-                <View style={styles.codeBox}>
-                  <Text style={styles.codeLabel}>Your Code</Text>
-                  <Text style={styles.code}>{referralCode}</Text>
+              <View style={styles.codeBox}>
+                <View style={styles.codeTextGroup}>
+                  <Text style={styles.codeLabel}>Your unique code</Text>
+                  <Text style={styles.code} numberOfLines={1} adjustsFontSizeToFit>
+                    {referralCode}
+                  </Text>
                 </View>
                 <HapticTouchable
-                  style={styles.copyButton}
+                  style={styles.copyIconButton}
                   onPress={handleCopyCode}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
-                  <Text style={styles.copyButtonText}>Copy</Text>
+                  <Ionicons name="copy-outline" size={22} color="#FFFFFF" />
                 </HapticTouchable>
               </View>
 
@@ -182,7 +156,7 @@ export default function SettingsScreen() {
                 style={styles.shareButton}
                 onPress={handleShareReferral}
               >
-                <Text style={styles.shareButtonText}>Share Referral Code</Text>
+                <Text style={styles.shareButtonText}>Share your code</Text>
               </HapticTouchable>
 
               <View style={styles.statsContainer}>
@@ -200,6 +174,13 @@ export default function SettingsScreen() {
           )}
 
           <View style={styles.menuContainer}>
+              <HapticTouchable style={styles.menuItem} onPress={() => router.push('/transactions')}>
+                <Text style={styles.menuText}>Coin History</Text>
+                <Text style={styles.menuArrow}>›</Text>
+              </HapticTouchable>
+
+              <View style={styles.divider} />
+
               <HapticTouchable style={styles.menuItem} onPress={handleGiveUsLove}>
                 <Text style={styles.menuText}>Rate Enola</Text>
                 <Text style={styles.menuArrow}>›</Text>
@@ -261,9 +242,9 @@ const styles = StyleSheet.create({
     marginBottom: 28,
     borderRadius: 20,
     padding: 24,
-    shadowColor: '#007AFF',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.08,
     shadowRadius: 20,
     elevation: 8,
     borderWidth: 1,
@@ -283,66 +264,51 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: -0.3,
   },
-  codeContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 18,
-  },
   codeBox: {
-    flex: 1,
-    backgroundColor: '#F8F8F8',
-    borderRadius: 16,
-    padding: 20,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E5EA',
+    backgroundColor: '#1C1C1E',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    marginBottom: 12,
+  },
+  codeTextGroup: {
+    flex: 1,
+    marginRight: 12,
   },
   codeLabel: {
     fontSize: 13,
     color: '#8E8E93',
-    fontWeight: '600',
-    marginBottom: 6,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    fontWeight: '500',
+    marginBottom: 2,
+    letterSpacing: -0.2,
   },
   code: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#1C1C1E',
-    letterSpacing: 3,
-  },
-  copyButton: {
-    backgroundColor: '#1C1C1E',
-    borderRadius: 16,
-    paddingHorizontal: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  copyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: '700',
-    letterSpacing: -0.3,
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  copyIconButton: {
+    padding: 4,
   },
   shareButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   shareButtonText: {
-    color: '#FFFFFF',
+    color: '#1C1C1E',
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: -0.3,
@@ -362,7 +328,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#007AFF',
+    color: '#1C1C1E',
     marginBottom: 6,
     letterSpacing: -1,
   },

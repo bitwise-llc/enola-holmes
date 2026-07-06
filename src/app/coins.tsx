@@ -1,7 +1,8 @@
 import { EnolaHeading } from "@/components/enola-heading";
 import { HapticTouchable } from "@/components/haptic-touchable";
 import { SubscriptionDisclosure } from "@/components/subscription-disclosure";
-import { getCoins, getReferralInfo } from "@/utils/coins";
+import { getCoins } from "@/utils/coins";
+import { useProfile } from "@/utils/useRealtime";
 import {
   getCoinOfferings,
   getSubscriptionOfferings,
@@ -22,7 +23,7 @@ import {
   View,
 } from "react-native";
 import type { PurchasesPackage } from "react-native-purchases";
-import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
+import RevenueCatUI from "react-native-purchases-ui";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Coin packs (consumables), matched to RC `coins` offering package identifiers.
@@ -67,19 +68,17 @@ export default function CoinsScreen() {
   };
 
   const pillWidth = trackWidth > 0 ? (trackWidth - 8) / 2 : 0; // track padding 4 each side
-  const [coins, setCoins] = useState<number | null>(null);
+  // Live balance + referral: the badge updates the instant the webhook credits coins,
+  // so a purchase reflects without a manual refresh.
+  const profile = useProfile();
+  const coins = profile?.coins ?? null;
+  const referral = profile ? { code: profile.code, count: profile.count } : null;
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [offeringsLoaded, setOfferingsLoaded] = useState(false);
   const [buyingId, setBuyingId] = useState<string | null>(null);
-  const [referral, setReferral] = useState<{
-    code: string;
-    count: number;
-  } | null>(null);
 
   useEffect(() => {
-    getReferralInfo().then(setReferral); // prefetch so /settings renders instantly
     (async () => {
-      setCoins(await getCoins());
       const coinOffering = await getCoinOfferings();
       setPackages(coinOffering?.availablePackages ?? []);
       setOfferingsLoaded(true);
@@ -105,7 +104,8 @@ export default function CoinsScreen() {
         }
         await new Promise((r) => setTimeout(r, 1000));
       }
-      setCoins(latest);
+      // No setCoins: the badge is driven by useProfile and updates live when the
+      // webhook writes. We poll only to detect the credit landed for this alert.
 
       if (credited) {
         Alert.alert("Success", `You now have ${latest} coins!`);
@@ -133,13 +133,9 @@ export default function CoinsScreen() {
       );
       return;
     }
-    const result = await RevenueCatUI.presentPaywall({ offering });
-    if (
-      result === PAYWALL_RESULT.PURCHASED ||
-      result === PAYWALL_RESULT.RESTORED
-    ) {
-      setCoins(await getCoins()); // entitlement/coins handled server-side; refresh display
-    }
+    // On purchase/restore the webhook credits coins server-side; useProfile reflects
+    // it live, so we don't need the result to refresh anything.
+    await RevenueCatUI.presentPaywall({ offering });
   };
 
   return (
