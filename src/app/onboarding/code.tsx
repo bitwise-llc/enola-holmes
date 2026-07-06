@@ -12,7 +12,7 @@ import { Pagination } from '../../components/pagination';
 import { CodeBox } from '../../components/code-box';
 import { supabase } from '@/utils/supabase';
 
-// Referral codes are 6 chars, A-Z0-9 (see UPDATE-REFERRAL-CODE-LENGTH.sql).
+// Referral codes are 6 chars, A-Z0-9 (see supabase/UPDATE-REFERRAL-CODE-LENGTH.sql).
 const CODE_LENGTH = 6;
 const tickSound = require('../../../assets/sounds/counter-tick.m4a');
 

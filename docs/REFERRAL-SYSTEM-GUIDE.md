@@ -20,7 +20,7 @@ Your Enola app now has a fully functional referral system!
 ### Step 1: Run the Database Migration
 
 1. Open **Supabase SQL Editor**
-2. Copy the entire contents of `REFERRAL-SYSTEM-SETUP.sql`
+2. Copy the entire contents of `supabase/REFERRAL-SYSTEM-SETUP.sql`
 3. Paste and click **Run**
 
 This will:
@@ -123,7 +123,7 @@ This user:
 ### Files Modified
 
 1. **Database:**
-   - `REFERRAL-SYSTEM-SETUP.sql` - Complete DB migration
+   - `supabase/REFERRAL-SYSTEM-SETUP.sql` - Complete DB migration
 
 2. **Onboarding:**
    - `src/app/onboarding/welcome.tsx` - Added referral code input

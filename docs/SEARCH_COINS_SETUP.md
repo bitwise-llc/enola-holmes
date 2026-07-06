@@ -2,7 +2,7 @@
 
 ## What Was Implemented
 
-### 1. Database Schema (`supabase-schema.sql`)
+### 1. Database Schema (`supabase/supabase-schema.sql`)
 Run this in your Supabase SQL Editor to set up the database:
 
 ```sql
@@ -66,7 +66,7 @@ Helper functions for search and coin operations:
 1. **Run SQL Schema**:
    - Open Supabase Dashboard
    - Go to SQL Editor
-   - Copy and paste `supabase-schema.sql`
+   - Copy and paste `supabase/supabase-schema.sql`
    - Execute
 
 2. **Test User**:
