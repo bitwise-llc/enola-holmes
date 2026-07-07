@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { StyleSheet, View, Text, Alert, Linking } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, View, Text, Alert, Linking, ScrollView, RefreshControl } from 'react-native';
 // expo-image decodes the large (1.8MB) headshot PNG reliably on device; RN's Image
 // rendered it in the simulator but left it blank on physical devices.
 import { Image } from 'expo-image';
@@ -13,12 +14,21 @@ import { useProfile } from '@/utils/useRealtime';
 
 export default function HomeScreen() {
   // Live balance + referral — updates on screen the moment they change server-side.
-  const profile = useProfile();
+  // `refresh` backs pull-to-refresh, so a stale badge (e.g. if realtime dropped) can
+  // always be corrected by pulling down.
+  const { profile, refresh } = useProfile();
   const coins = profile?.coins ?? null;
   const referral = profile ? { code: profile.code, count: profile.count } : null;
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Coins are deducted only in scanning.tsx via record_search_and_deduct_coin, tied to a
-  // completed search. This screen only displays the balance — no spend here, or it would
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  };
+
+  // Coins are deducted server-side by the face-search edge function (spend_coin), tied to
+  // a completed search. This screen only displays the balance — no spend here, or it would
   // double-charge (two coins per scan).
 
   const pickImageFromGallery = async () => {
@@ -97,7 +107,12 @@ export default function HomeScreen() {
         </HapticTouchable>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1C1C1E" />
+        }
+      >
         <View style={styles.speechBubble}>
           <Text style={styles.speechText}>
             Upload their photo,{'\n'}
@@ -113,7 +128,7 @@ export default function HomeScreen() {
             contentFit="contain"
           />
         </View>
-      </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <HapticTouchable
@@ -215,7 +230,7 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,

@@ -11,7 +11,6 @@ import { usePostHog } from 'posthog-react-native';
 import { StaggerIn } from '../../components/stagger-in';
 import { Pagination } from '../../components/pagination';
 import { useState, useMemo, useEffect } from 'react';
-import * as StoreReview from 'expo-store-review';
 import Animated, {
   useSharedValue,
   useAnimatedRef,
@@ -109,12 +108,6 @@ export default function WelcomeScreen() {
   const handleGetStarted = async () => {
     setLoading(true);
     console.log('Get Started clicked - creating user and profile');
-
-    // Ask for the App Store rating on tap. requestReview resolves once the user
-    // rates or dismisses ("Not Now"); either way we then finish onboarding below.
-    if (await StoreReview.hasAction()) {
-      await StoreReview.requestReview();
-    }
 
     try {
       // Anonymous device account: auto-generated credentials on our own domain so the
@@ -223,7 +216,7 @@ export default function WelcomeScreen() {
 
         <StaggerIn delay={600}>
           <Text style={styles.title}>Join 5,000+ Users</Text>
-          <Text style={styles.subtitle}>Be one of them — a quick rating helps us grow.</Text>
+          <Text style={styles.subtitle}>Trusted by thousands to find the truth.</Text>
         </StaggerIn>
       </View>
 

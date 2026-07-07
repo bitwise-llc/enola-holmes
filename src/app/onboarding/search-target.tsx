@@ -21,7 +21,6 @@ const options: Option[] = [
   { id: 'significant', icon: 'heart-outline', label: 'Significant other' },
   { id: 'ex', icon: 'heart-dislike-outline', label: 'EXBF/GF' },
   { id: 'myself', icon: 'diamond-outline', label: 'Myself' },
-  { id: 'doppelganger', icon: 'people-outline', label: 'Doppelganger' },
   { id: 'uber', icon: 'car-outline', label: 'Uber drivers' },
   { id: 'prefer', icon: 'help-circle-outline', label: 'Prefer not to say' },
 ];

@@ -29,7 +29,9 @@ const FALLBACK_POINTS = [
 export default function ScanningScreen() {
   const { imageUri } = useLocalSearchParams<{ imageUri: string }>();
   const [searchStatus, setSearchStatus] = useState('Analyzing image...');
-  const [actualProgress, setActualProgress] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(0); // smoothed 0→100 shown to the user
+  // Ref mirror so completion handlers can snap the ramp to 100 without a stale closure.
+  const rampRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Detected landmarks (null until resolved). Dots wander until this is set, then lock onto them.
   const [facialPoints, setFacialPoints] = useState<Array<{ x: number; y: number; type: string }> | null>(null);
   const [clockTick, setClockTick] = useState(0);   // 0→1 looping clock, drives the wander
@@ -73,6 +75,27 @@ export default function ScanningScreen() {
     setFacialPoints(points);
   };
 
+  // Fake but smooth progress: creep toward 90% while the opaque server search runs,
+  // decelerating as it climbs so it never visibly stalls. finishRamp snaps to 100.
+  const startRamp = () => {
+    if (rampRef.current) return;
+    rampRef.current = setInterval(() => {
+      setDisplayProgress((p) => (p >= 90 ? p : p + (90 - p) * 0.04 + 0.3));
+    }, 60);
+  };
+
+  const stopRamp = () => {
+    if (rampRef.current) {
+      clearInterval(rampRef.current);
+      rampRef.current = null;
+    }
+  };
+
+  const finishRamp = () => {
+    stopRamp();
+    setDisplayProgress(100);
+  };
+
   const searchByFace = async () => {
     try {
       // Check coin balance first
@@ -100,16 +123,17 @@ export default function ScanningScreen() {
       }
 
       setSearchStatus('Uploading image...');
-      setActualProgress(10);
 
       // Search runs entirely server-side (Edge Function holds the FaceCheck token and
-      // polls for results). We just await the final match list.
+      // polls for results). We can't get real progress, so creep the bar toward 90%
+      // over the expected search time, then snap to 100 on completion.
       setSearchStatus('Searching faces...');
-      setActualProgress(40);
+      startRamp();
 
       const result = await searchFace(imageUri);
 
       if (result.error) {
+        stopRamp();
         if (result.code === 'IMAGE_ERROR') {
           Alert.alert(
             'No Face Detected',
@@ -134,10 +158,16 @@ export default function ScanningScreen() {
         throw new Error(result.error);
       }
 
-      const items = result.items ?? [];
-      console.log(`Search complete! Found ${items.length} results`);
+      // Keep only relevant matches (same threshold/cap the results screen applies), so the
+      // count saved to history matches the count shown on the results screen. Filtering here
+      // once means results.tsx receives an already-relevant list and both counts agree.
+      const items = (result.items ?? [])
+        .filter((r) => r.score >= 70)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 50);
+      console.log(`Search complete! Found ${items.length} relevant matches`);
       setSearchStatus('Found matches!');
-      setActualProgress(100);
+      finishRamp();
 
       // Save to history only — the coin was already deducted server-side by the function.
       await recordSearch(imageUri, items.length, items);
@@ -151,6 +181,7 @@ export default function ScanningScreen() {
 
     } catch (error: any) {
       console.error('Face search error:', error);
+      stopRamp();
       setSearchStatus('Search failed');
 
       // Show user-friendly error message
@@ -304,17 +335,21 @@ export default function ScanningScreen() {
       ])
     ).start();
 
-    return () => clockAnim.removeListener(clockId);
+    return () => {
+      clockAnim.removeListener(clockId);
+      stopRamp();
+    };
   }, []);
 
-  // Animate progress bar when actualProgress changes
+  // Animate progress bar toward the smoothed value. Short duration so it tracks the
+  // ramp's 60ms ticks without lag; the final 100 eases in over a longer beat.
   useEffect(() => {
     Animated.timing(progressValue, {
-      toValue: actualProgress,
-      duration: 500,
+      toValue: displayProgress,
+      duration: displayProgress === 100 ? 400 : 120,
       useNativeDriver: false,
     }).start();
-  }, [actualProgress]);
+  }, [displayProgress]);
 
   // Once landmarks resolve, ease every dot from its wandering position onto its target (lock-on).
   useEffect(() => {
@@ -553,7 +588,7 @@ export default function ScanningScreen() {
             <View style={styles.progressHeader}>
               <Text style={styles.progressLabel}>Scanning Progress</Text>
               <Text style={styles.progressPercent}>
-                {Math.round(actualProgress)}%
+                {Math.round(displayProgress)}%
               </Text>
             </View>
             <View style={styles.progressBarContainer}>
