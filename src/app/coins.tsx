@@ -17,6 +17,7 @@ import {
   Animated,
   Easing,
   LayoutChangeEvent,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -70,12 +71,21 @@ export default function CoinsScreen() {
   const pillWidth = trackWidth > 0 ? (trackWidth - 8) / 2 : 0; // track padding 4 each side
   // Live balance + referral: the badge updates the instant the webhook credits coins,
   // so a purchase reflects without a manual refresh.
-  const profile = useProfile();
+  const { profile, refresh } = useProfile();
   const coins = profile?.coins ?? null;
   const referral = profile ? { code: profile.code, count: profile.count } : null;
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [offeringsLoaded, setOfferingsLoaded] = useState(false);
   const [buyingId, setBuyingId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull-to-refresh re-fetches the real balance, so a badge stuck on "–" (realtime
+  // dropped, or session rehydrated late on a cold launch) can be corrected by hand.
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     (async () => {
@@ -207,14 +217,20 @@ export default function CoinsScreen() {
         </HapticTouchable>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         <Animated.View style={{ opacity: contentOpacity }}>
           {tab === "topup" ? (
             <>
               <View style={styles.heroSection}>
                 <Text style={styles.coinEmoji}>🪙</Text>
                 <Text style={styles.title}>Get More Coins</Text>
-                <Text style={styles.subtitle}>1 Coin = 1 Face Scan</Text>
+                <Text style={styles.subtitle}>1 Coin = 1 Image Scan</Text>
               </View>
 
               <View style={styles.packagesContainer}>

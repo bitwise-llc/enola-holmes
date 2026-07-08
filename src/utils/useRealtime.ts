@@ -34,18 +34,18 @@ export const useProfile = (): { profile: Profile | null; refresh: () => Promise<
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
+    let started = false; // only fetch+subscribe once, for the first session we see
 
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (cancelled || !session) return;
-      const uid = session.user.id;
+    const apply = (row: { coins?: number; referral_code?: string; referral_count?: number }) =>
+      setProfile({
+        coins: row.coins ?? 0,
+        code: row.referral_code ?? '',
+        count: row.referral_count ?? 0,
+      });
 
-      const apply = (row: { coins?: number; referral_code?: string; referral_count?: number }) =>
-        setProfile({
-          coins: row.coins ?? 0,
-          code: row.referral_code ?? '',
-          count: row.referral_count ?? 0,
-        });
+    const start = async (uid: string) => {
+      if (cancelled || started) return;
+      started = true;
 
       const { data } = await supabase
         .from('profiles')
@@ -55,10 +55,6 @@ export const useProfile = (): { profile: Profile | null; refresh: () => Promise<
       if (cancelled) return;
       if (data) apply(data);
 
-      // Guard against the async-cleanup race: if this run was torn down while
-      // awaiting (Fast Refresh / StrictMode double-invoke), don't wire up a
-      // channel. Name is unique per hook instance (see channelSeq) so concurrent
-      // mounts on different screens never share — and thus never remove — a channel.
       if (cancelled) return;
       const name = `profile:${uid}:${seq.current}`;
 
@@ -70,9 +66,25 @@ export const useProfile = (): { profile: Profile | null; refresh: () => Promise<
           (payload) => apply(payload.new as any),
         )
         .subscribe();
-    })();
+    };
 
-    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
+    // In release builds a pushed screen can mount before the persisted session
+    // has rehydrated from AsyncStorage, so a one-shot getSession() returns null
+    // and the badge sticks on "–". onAuthStateChange fires INITIAL_SESSION once
+    // rehydration completes (and again on refresh), so we start from whichever
+    // arrives first. `started` makes it idempotent.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session) start(session.user.id);
+    });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) start(session.user.id);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   return { profile, refresh };
@@ -88,12 +100,11 @@ export const useCoinTransactions = (): { txns: CoinTransaction[]; loading: boole
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
+    let started = false;
 
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (!session) { setLoading(false); return; }
-      const uid = session.user.id;
+    const start = async (uid: string) => {
+      if (cancelled || started) return;
+      started = true;
 
       const { data } = await supabase
         .from('coin_transactions')
@@ -103,8 +114,6 @@ export const useCoinTransactions = (): { txns: CoinTransaction[]; loading: boole
       setTxns(data ?? []);
       setLoading(false);
 
-      // See useProfile: guard the async-cleanup race. Unique per-instance name
-      // (channelSeq) so concurrent mounts never share or remove each other's channel.
       if (cancelled) return;
       const name = `txns:${uid}:${seq.current}`;
 
@@ -116,9 +125,25 @@ export const useCoinTransactions = (): { txns: CoinTransaction[]; loading: boole
           (payload) => setTxns((prev) => [payload.new as CoinTransaction, ...prev]),
         )
         .subscribe();
-    })();
+    };
 
-    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
+    // See useProfile: a release-build screen can mount before the persisted
+    // session rehydrates, so one-shot getSession() returns null. Start from
+    // whichever of onAuthStateChange (INITIAL_SESSION) or getSession() lands a
+    // session first; `started` keeps it idempotent.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session) start(session.user.id);
+    });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) start(session.user.id);
+      else if (!started) setLoading(false); // no user at all → stop the spinner
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   return { txns, loading };
