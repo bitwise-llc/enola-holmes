@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/utils/supabase';
 import type { CoinTransaction } from '@/utils/coins';
 
 type Profile = { coins: number; code: string; count: number };
+
+// Monotonic id so two mounts of the same hook (e.g. tabs home + the pushed coins
+// screen) get DISTINCT channel names. A shared name made the second subscriber's
+// mount remove the first's live channel, killing updates on one screen. Unique
+// names per instance means neither ever touches the other's channel.
+let channelSeq = 0;
 
 // Live view of the signed-in user's profile row (coins + referral). Fetches once,
 // then subscribes to postgres_changes on that single row so any server-side coin/
@@ -12,6 +18,7 @@ type Profile = { coins: number; code: string; count: number };
 // Returns a `refresh` callback so the UI can pull-to-refresh if realtime lags/drops.
 export const useProfile = (): { profile: Profile | null; refresh: () => Promise<void> } => {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const seq = useRef(++channelSeq);
 
   const refresh = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -50,11 +57,10 @@ export const useProfile = (): { profile: Profile | null; refresh: () => Promise<
 
       // Guard against the async-cleanup race: if this run was torn down while
       // awaiting (Fast Refresh / StrictMode double-invoke), don't wire up a
-      // channel. Also drop any stale same-named channel so we never call
-      // .on() on an already-joining socket ("cannot add postgres_changes").
+      // channel. Name is unique per hook instance (see channelSeq) so concurrent
+      // mounts on different screens never share — and thus never remove — a channel.
       if (cancelled) return;
-      const name = `profile:${uid}`;
-      supabase.getChannels().filter((c) => c.topic === `realtime:${name}`).forEach((c) => supabase.removeChannel(c));
+      const name = `profile:${uid}:${seq.current}`;
 
       channel = supabase
         .channel(name)
@@ -77,6 +83,7 @@ export const useProfile = (): { profile: Profile | null; refresh: () => Promise<
 export const useCoinTransactions = (): { txns: CoinTransaction[]; loading: boolean } => {
   const [txns, setTxns] = useState<CoinTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const seq = useRef(++channelSeq);
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -96,11 +103,10 @@ export const useCoinTransactions = (): { txns: CoinTransaction[]; loading: boole
       setTxns(data ?? []);
       setLoading(false);
 
-      // See useProfile: guard the async-cleanup race + drop any stale same-named
-      // channel so .on() never runs on an already-joining socket.
+      // See useProfile: guard the async-cleanup race. Unique per-instance name
+      // (channelSeq) so concurrent mounts never share or remove each other's channel.
       if (cancelled) return;
-      const name = `txns:${uid}`;
-      supabase.getChannels().filter((c) => c.topic === `realtime:${name}`).forEach((c) => supabase.removeChannel(c));
+      const name = `txns:${uid}:${seq.current}`;
 
       channel = supabase
         .channel(name)

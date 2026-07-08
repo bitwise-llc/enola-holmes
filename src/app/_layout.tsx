@@ -29,6 +29,25 @@ Sentry.init({
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
+// Configure RevenueCat at module load — BEFORE any component effect can run
+// logIn or trigger a purchase. Previously configure() lived in RootLayout's
+// effect while IdentityGate (a child) ran logIn in its own effect; React fires
+// child effects before parent effects, so logIn could hit an unconfigured SDK,
+// and any purchase before the async getSession→logIn resolved was attributed to
+// an anonymous $RCAnonymousID — so the webhook credited the wrong app_user_id
+// and coins never reached the real Supabase user. Configuring here removes the
+// race: the SDK is ready before the first render.
+Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+const rcApiKey =
+  Platform.OS === 'ios'
+    ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY
+    : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY;
+if (rcApiKey) {
+  Purchases.configure({ apiKey: rcApiKey });
+} else {
+  console.warn('⚠️ RevenueCat key missing for', Platform.OS);
+}
+
 // Restores tracking identity on every launch: if a session exists, tie the
 // user to RevenueCat/PostHog/Sentry so returning users' errors aren't
 // <anonymous>. Lives under PostHogProvider so it can use the posthog instance.
@@ -52,21 +71,7 @@ function RootLayout() {
   }, [navigationRef]);
 
   useEffect(() => {
-    // Initialize RevenueCat
-    Purchases.setLogLevel(LOG_LEVEL.DEBUG);
-
-    const apiKey =
-      Platform.OS === 'ios'
-        ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY
-        : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY;
-
-    if (apiKey) {
-      Purchases.configure({ apiKey });
-    } else {
-      console.warn('⚠️ RevenueCat key missing for', Platform.OS);
-    }
-
-    // Hide splash screen after the app is ready
+    // RevenueCat is configured at module load (see above). Just hide the splash.
     SplashScreen.hideAsync();
   }, []);
 
