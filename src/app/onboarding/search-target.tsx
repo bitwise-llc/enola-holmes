@@ -16,13 +16,12 @@ type Option = {
 };
 
 const options: Option[] = [
-  { id: 'criminals', icon: 'warning-outline', label: 'Potential criminals', wide: true },
-  { id: 'dating', icon: 'eye-outline', label: 'Dating matches' },
-  { id: 'significant', icon: 'heart-outline', label: 'Significant other' },
-  { id: 'ex', icon: 'heart-dislike-outline', label: 'EXBF/GF' },
-  { id: 'myself', icon: 'diamond-outline', label: 'Myself' },
-  { id: 'uber', icon: 'car-outline', label: 'Uber drivers' },
-  { id: 'prefer', icon: 'help-circle-outline', label: 'Prefer not to say' },
+  { id: 'source', icon: 'search-outline', label: 'Find where an image came from', wide: true },
+  { id: 'similar', icon: 'images-outline', label: 'Find similar images' },
+  { id: 'verify', icon: 'shield-checkmark-outline', label: 'Verify a photo' },
+  { id: 'appears', icon: 'globe-outline', label: 'See where a photo appears' },
+  { id: 'products', icon: 'pricetag-outline', label: 'Identify products' },
+  { id: 'explore', icon: 'compass-outline', label: 'Just exploring' },
 ];
 
 export default function SearchTargetScreen() {
@@ -54,7 +53,7 @@ export default function SearchTargetScreen() {
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <StaggerIn>
-        <Text style={styles.title}>Who do you plan to search?</Text>
+        <Text style={styles.title}>What will you search for?</Text>
 
         <View style={styles.optionsGrid}>
           {options.map((option) => (
