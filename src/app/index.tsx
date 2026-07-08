@@ -1,23 +1,11 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator, Alert, Animated, Easing, Image, useWindowDimensions } from 'react-native';
 import { HapticTouchable } from '@/components/haptic-touchable';
-import Reanimated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { OnlyFansIcon } from '../components/onlyfans-icon';
 import { hasCompletedOnboarding, resetOnboarding } from '../utils/storage';
 import { supabase } from '../utils/supabase';
-
-// The three intro "pages" are now phases of one screen. The mascot stays put;
-// only the block below it swaps.
-const findItems = [
-  { text: 'Criminal Record', icon: 'shield-checkmark-outline' },
-  { text: 'OnlyFans', icon: 'onlyfans' },
-  { text: 'LinkedIn', icon: 'briefcase-outline' },
-  { text: 'Hidden TikToks', icon: 'logo-tiktok' },
-];
-const ITEM_STAGGER = 400; // ms between each band appearing
 
 // Mascot + glass geometry. `enola-glass-full.png` (87x190) is a pixel crop of
 // `enola-body.png` at source (619, 207) with the finger-covered part of the bar synthesized,
@@ -51,8 +39,6 @@ export default function HomeScreen() {
   const phaseBoxHeight = Math.min(260, height * 0.34);
 
   const [isLoading, setIsLoading] = useState(true);
-  // 'landing' -> 'find' -> 'photo' -> navigate to onboarding. The mascot never moves.
-  const [phase, setPhase] = useState<'landing' | 'find' | 'photo'>('landing');
   // Magnifying glass swoops from big-and-overhead down into her hand; once settled we swap
   // to the original one-piece artwork.
   const [landed, setLanded] = useState(false);
@@ -118,22 +104,8 @@ export default function HomeScreen() {
 
   const handleGetStarted = () => {
     console.log('Get Started pressed');
-    setPhase('find');
+    router.replace('/onboarding/stats');
   };
-
-  // Drive the intro phases on a timer; the mascot stays fixed the whole time.
-  useEffect(() => {
-    if (phase === 'find') {
-      // Wait for all bands to stagger in, then move on.
-      const total = 400 + findItems.length * ITEM_STAGGER + 900;
-      const t = setTimeout(() => setPhase('photo'), total);
-      return () => clearTimeout(t);
-    }
-    if (phase === 'photo') {
-      const t = setTimeout(() => router.replace('/onboarding/stats'), 2500);
-      return () => clearTimeout(t);
-    }
-  }, [phase]);
 
   if (isLoading) {
     return (
@@ -224,70 +196,23 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Everything below the mascot swaps per phase; the mascot above never moves.
-            A fixed-height box reserves the space so nothing re-centers between phases. */}
         <View style={[styles.phaseBox, { height: phaseBoxHeight }]}>
-          {phase === 'landing' && (
-            <Reanimated.View
-              key="landing"
-              entering={FadeIn.duration(300)}
-              exiting={FadeOut.duration(200)}
-              style={styles.phaseCenter}
-            >
-              <HapticTouchable onLongPress={handleResetOnboarding} delayLongPress={2000}>
-                <Text style={styles.logo}>
-                  <Text style={styles.greeting}>Hi, I&apos;m </Text>Enola
-                </Text>
-              </HapticTouchable>
-              <Text style={styles.subtitle}>Your personal search assistant</Text>
-
-              <HapticTouchable style={styles.button} onPress={handleGetStarted} activeOpacity={0.7}>
-                <Text style={styles.buttonText}>Get Started</Text>
-              </HapticTouchable>
-            </Reanimated.View>
-          )}
-
-          {phase === 'find' && (
-            <Reanimated.View
-              key="find"
-              entering={FadeIn.duration(300)}
-              exiting={FadeOut.duration(200)}
-              style={styles.phaseCenter}
-            >
-              <Text style={styles.title}>Find their...</Text>
-              <View style={styles.itemsList}>
-                {findItems.map((item, index) => (
-                  <Reanimated.View
-                    key={index}
-                    entering={FadeInDown.delay(400 + index * ITEM_STAGGER).duration(450)}
-                    style={styles.item}
-                  >
-                    <Text style={styles.itemText}>{item.text}</Text>
-                    {item.icon === 'onlyfans' ? (
-                      <OnlyFansIcon size={24} color="#1C1C1E" />
-                    ) : (
-                      <Ionicons name={item.icon as any} size={24} color="#1C1C1E" />
-                    )}
-                  </Reanimated.View>
-                ))}
-              </View>
-            </Reanimated.View>
-          )}
-
-          {phase === 'photo' && (
-            <Reanimated.View
-              key="photo"
-              entering={FadeIn.duration(400)}
-              style={styles.phaseCenter}
-            >
-              <Text style={styles.title}>
-                Find their entire{'\n'}online presence
+          <Reanimated.View
+            key="landing"
+            entering={FadeIn.duration(300)}
+            style={styles.phaseCenter}
+          >
+            <HapticTouchable onLongPress={handleResetOnboarding} delayLongPress={2000}>
+              <Text style={styles.logo}>
+                <Text style={styles.greeting}>Hi, I&apos;m </Text>Enola
               </Text>
-              <Text style={styles.photoSubtitle}>
-                all from <Text style={styles.accent}>ONE</Text> photo.
-              </Text>
-            </Reanimated.View>
-          )}
+            </HapticTouchable>
+            <Text style={styles.subtitle}>Your personal search assistant</Text>
+
+            <HapticTouchable style={styles.button} onPress={handleGetStarted} activeOpacity={0.7}>
+              <Text style={styles.buttonText}>Get Started</Text>
+            </HapticTouchable>
+          </Reanimated.View>
         </View>
       </View>
     </SafeAreaView>
@@ -328,39 +253,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingTop: 8,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000000',
-    textAlign: 'center',
-    lineHeight: 36,
-    marginBottom: 24,
-  },
-  itemsList: {
-    alignSelf: 'center',
-    alignItems: 'flex-start',
-    gap: 18,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  itemText: {
-    fontSize: 24,
-    fontWeight: '500',
-    color: '#9E9E9E',
-  },
-  photoSubtitle: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#000000',
-    textAlign: 'center',
-  },
-  accent: {
-    fontWeight: 'bold',
-    textDecorationLine: 'underline',
   },
   // Dimensions set inline (scale with device).
   mascot: {

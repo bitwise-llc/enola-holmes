@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase';
 import type { CoinTransaction } from '@/utils/coins';
 
@@ -9,8 +9,20 @@ type Profile = { coins: number; code: string; count: number };
 // referral change (scan, purchase, referral landing) reflects on screen instantly —
 // no focus-refresh or polling. Realtime must be enabled on `profiles` (see
 // supabase/ENABLE-REALTIME.sql). Falls back to the initial fetch if the socket drops.
-export const useProfile = (): Profile | null => {
+// Returns a `refresh` callback so the UI can pull-to-refresh if realtime lags/drops.
+export const useProfile = (): { profile: Profile | null; refresh: () => Promise<void> } => {
   const [profile, setProfile] = useState<Profile | null>(null);
+
+  const refresh = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('coins, referral_code, referral_count')
+      .eq('id', session.user.id)
+      .single();
+    if (data) setProfile({ coins: data.coins ?? 0, code: data.referral_code ?? '', count: data.referral_count ?? 0 });
+  }, []);
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -36,13 +48,16 @@ export const useProfile = (): Profile | null => {
       if (cancelled) return;
       if (data) apply(data);
 
-      // Remove any stale channel with this topic first — supabase caches channels
-      // by topic, so a double-mounted effect (StrictMode) would otherwise reuse an
-      // already-subscribed instance and `.on()` throws. ponytail: cheap idempotency guard.
-      supabase.getChannels().filter((c) => c.topic === `realtime:profile:${uid}`).forEach((c) => supabase.removeChannel(c));
+      // Guard against the async-cleanup race: if this run was torn down while
+      // awaiting (Fast Refresh / StrictMode double-invoke), don't wire up a
+      // channel. Also drop any stale same-named channel so we never call
+      // .on() on an already-joining socket ("cannot add postgres_changes").
+      if (cancelled) return;
+      const name = `profile:${uid}`;
+      supabase.getChannels().filter((c) => c.topic === `realtime:${name}`).forEach((c) => supabase.removeChannel(c));
 
       channel = supabase
-        .channel(`profile:${uid}`)
+        .channel(name)
         .on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${uid}` },
@@ -54,7 +69,7 @@ export const useProfile = (): Profile | null => {
     return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
   }, []);
 
-  return profile;
+  return { profile, refresh };
 };
 
 // Live coin ledger, newest first. Fetches once, then prepends any INSERT to this
@@ -81,10 +96,14 @@ export const useCoinTransactions = (): { txns: CoinTransaction[]; loading: boole
       setTxns(data ?? []);
       setLoading(false);
 
-      supabase.getChannels().filter((c) => c.topic === `realtime:txns:${uid}`).forEach((c) => supabase.removeChannel(c));
+      // See useProfile: guard the async-cleanup race + drop any stale same-named
+      // channel so .on() never runs on an already-joining socket.
+      if (cancelled) return;
+      const name = `txns:${uid}`;
+      supabase.getChannels().filter((c) => c.topic === `realtime:${name}`).forEach((c) => supabase.removeChannel(c));
 
       channel = supabase
-        .channel(`txns:${uid}`)
+        .channel(name)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'coin_transactions', filter: `user_id=eq.${uid}` },

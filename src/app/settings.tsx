@@ -16,7 +16,7 @@ export default function SettingsScreen() {
   const posthog = usePostHog();
   // Live profile drives the values; nav params seed the first paint so there's no
   // pop-in when arriving from the coins screen. The hook wins once it resolves.
-  const profile = useProfile();
+  const { profile } = useProfile();
   const referralCode = profile?.code ?? params.code ?? '';
   const referralCount = profile?.count ?? Number(params.count ?? 0);
   const loading = !profile && !params.code; // nothing to show from either source yet
@@ -90,8 +90,11 @@ export default function SettingsScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
+            // getSession() returns the cached token without refreshing; if it's
+            // expired the edge function's getUser() 401s. Refresh first so we send
+            // a live access_token.
+            const { data: { session }, error: refreshErr } = await supabase.auth.refreshSession();
+            if (refreshErr || !session) {
               Alert.alert('Not signed in', 'No account is currently signed in.');
               return;
             }

@@ -3,6 +3,8 @@ import { StyleSheet, View, Text, ScrollView, Image, Linking } from 'react-native
 import { HapticTouchable } from '@/components/haptic-touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as StoreReview from 'expo-store-review';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { EnolaHeading } from '@/components/enola-heading';
@@ -60,6 +62,32 @@ const detectPlatform = (url: string): { platform: string; color: string; icon: s
   }
 
   return { platform: 'Other', color: '#8E8E93', icon: 'globe-outline', username: undefined };
+};
+
+// Ask for an App Store rating once, when the user heads back home from results (not on the
+// results screen itself — the prompt should land on home). Native prompt is throttled by the
+// OS anyway; the flag just guarantees we only trigger it once.
+// Fame rank: famous socials first. Drives section order and the flat-list tie-break.
+const PLATFORM_ORDER = ['Instagram', 'TikTok', 'YouTube', 'X (Twitter)', 'Facebook', 'OnlyFans', 'LinkedIn', 'Twitch', 'Snapchat', 'Reddit', 'Other'];
+
+const REVIEW_ASKED_KEY = 'review_requested';
+const SEARCHES_DONE_KEY = 'searches_completed';
+// Apple 5.6.3: never ask for a rating before real engagement. This runs when the user
+// leaves a *results* screen, so a completed search already happened — but the reviewer's
+// very first search would still trigger it, which reads as "during onboarding". Gate on
+// a minimum of MIN_SEARCHES completed searches, and only ever ask once.
+const MIN_SEARCHES = 2;
+const maybeRequestReview = async () => {
+  try {
+    if (await AsyncStorage.getItem(REVIEW_ASKED_KEY)) return;
+    const done = Number(await AsyncStorage.getItem(SEARCHES_DONE_KEY)) + 1;
+    await AsyncStorage.setItem(SEARCHES_DONE_KEY, String(done));
+    if (done < MIN_SEARCHES) return;
+    await AsyncStorage.setItem(REVIEW_ASKED_KEY, '1');
+    if (await StoreReview.isAvailableAsync()) await StoreReview.requestReview();
+  } catch (error) {
+    console.error('Error requesting review:', error);
+  }
 };
 
 const ResultCard = ({ result }: { result: CategorizedResult }) => {
@@ -125,6 +153,7 @@ export default function ResultsScreen() {
   const params = useLocalSearchParams<{ imageUri: string; resultsData?: string }>();
   const { imageUri, resultsData } = params;
   const [categorizedResults, setCategorizedResults] = useState<Record<string, CategorizedResult[]>>({});
+  const [sortedResults, setSortedResults] = useState<CategorizedResult[]>([]);
   const [totalResults, setTotalResults] = useState(0);
 
   useEffect(() => {
@@ -158,20 +187,28 @@ export default function ResultsScreen() {
           categorized[platform].push(categorizedResult);
         });
 
-        // Sort each platform's results by score (highest first)
+        // Sort each platform's results by score (highest first) — for the summary chips.
         Object.keys(categorized).forEach(platform => {
           categorized[platform].sort((a, b) => b.score - a.score);
         });
 
+        // Flat list for the main view: strictly by match confidence (highest first),
+        // tie-broken so famous socials float above lesser platforms at the same score.
+        const rank = (p: string) => { const i = PLATFORM_ORDER.indexOf(p); return i === -1 ? PLATFORM_ORDER.length : i; };
+        const flat = relevant.map((result) => {
+          const { platform, color, icon, username } = detectPlatform(result.url);
+          return { ...result, platform, platformColor: color, platformIcon: icon, username };
+        }).sort((a, b) => b.score - a.score || rank(a.platform) - rank(b.platform));
+
         setCategorizedResults(categorized);
+        setSortedResults(flat);
       } catch (error) {
         console.error('Error parsing results:', error);
       }
     }
   }, [resultsData]);
 
-  const platformOrder = ['Instagram', 'TikTok', 'YouTube', 'X (Twitter)', 'Facebook', 'OnlyFans', 'LinkedIn', 'Twitch', 'Snapchat', 'Reddit', 'Other'];
-  const sortedPlatforms = platformOrder.filter(platform => categorizedResults[platform]);
+  const sortedPlatforms = PLATFORM_ORDER.filter(platform => categorizedResults[platform]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -181,7 +218,7 @@ export default function ResultsScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <HapticTouchable onPress={() => router.back()} style={styles.backButton}>
+          <HapticTouchable onPress={() => { router.back(); maybeRequestReview(); }} style={styles.backButton}>
             <Text style={styles.backButtonText}>✕</Text>
           </HapticTouchable>
           <EnolaHeading style={styles.logo} />
@@ -220,27 +257,13 @@ export default function ResultsScreen() {
             )}
           </View>
 
-          {/* Results by Platform */}
+          {/* Results — one list, ordered by match confidence (famous socials break ties) */}
           {totalResults > 0 ? (
-            sortedPlatforms.map((platform) => (
-              <View key={platform} style={styles.platformSection}>
-                <View style={styles.platformHeader}>
-                  <View style={styles.platformTitleRow}>
-                    <Ionicons name={categorizedResults[platform][0].platformIcon as any} size={24} color={categorizedResults[platform][0].platformColor} />
-                    <Text style={styles.platformTitle}>{platform}</Text>
-                  </View>
-                  <View style={[styles.platformBadge, { backgroundColor: '#F0F0F0' }]}>
-                    <Text style={[styles.platformCount, { color: '#000000' }]}>
-                      {categorizedResults[platform].length}
-                    </Text>
-                  </View>
-                </View>
-
-                {categorizedResults[platform].map((result, index) => (
-                  <ResultCard key={index} result={result} />
-                ))}
-              </View>
-            ))
+            <View style={styles.platformSection}>
+              {sortedResults.map((result, index) => (
+                <ResultCard key={index} result={result} />
+              ))}
+            </View>
           ) : (
             <View style={styles.noResultsCard}>
               <View style={styles.noResultsIconContainer}>
@@ -257,7 +280,7 @@ export default function ResultsScreen() {
           <View style={styles.actions}>
             <HapticTouchable
               style={styles.primaryButton}
-              onPress={() => router.replace('/(tabs)')}
+              onPress={() => { router.replace('/(tabs)'); maybeRequestReview(); }}
               activeOpacity={0.8}
             >
               <LinearGradient

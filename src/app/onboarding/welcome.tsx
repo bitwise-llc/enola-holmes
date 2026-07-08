@@ -11,7 +11,6 @@ import { usePostHog } from 'posthog-react-native';
 import { StaggerIn } from '../../components/stagger-in';
 import { Pagination } from '../../components/pagination';
 import { useState, useMemo, useEffect } from 'react';
-import * as StoreReview from 'expo-store-review';
 import Animated, {
   useSharedValue,
   useAnimatedRef,
@@ -29,11 +28,11 @@ import Animated, {
 
 const REVIEWS = [
   { text: 'finally found the information I needed. this app is amazing', author: 'Sarah M.' },
-  { text: 'dodged a total catfish thanks to Enola. worth every penny', author: 'Jessica R.' },
+  { text: 'found the original source of a photo in seconds. so useful', author: 'Jessica R.' },
   { text: 'super easy to use and the results were spot on', author: 'Megan T.' },
-  { text: 'gave me peace of mind before meeting someone new', author: 'Ashley K.' },
+  { text: 'tracked down where an image came from instantly', author: 'Ashley K.' },
   { text: 'wish I had this years ago. genuinely a lifesaver', author: 'Emily D.' },
-  { text: 'caught my match lying about their whole profile', author: 'Olivia P.' },
+  { text: 'showed me every site a picture appeared on', author: 'Olivia P.' },
   { text: 'fast, private, and it actually works', author: 'Rachel B.' },
 ];
 
@@ -109,12 +108,6 @@ export default function WelcomeScreen() {
   const handleGetStarted = async () => {
     setLoading(true);
     console.log('Get Started clicked - creating user and profile');
-
-    // Ask for the App Store rating on tap. requestReview resolves once the user
-    // rates or dismisses ("Not Now"); either way we then finish onboarding below.
-    if (await StoreReview.hasAction()) {
-      await StoreReview.requestReview();
-    }
 
     try {
       // Anonymous device account: auto-generated credentials on our own domain so the
@@ -210,7 +203,7 @@ export default function WelcomeScreen() {
         <Text style={styles.logo}>Enola</Text>
       </View>
 
-      <Pagination step={7} />
+      <Pagination step={6} />
 
       <View style={styles.content}>
         {/* Stars roll in with the referral counter-wheel animation, so they're rendered
@@ -223,7 +216,7 @@ export default function WelcomeScreen() {
 
         <StaggerIn delay={600}>
           <Text style={styles.title}>Join 5,000+ Users</Text>
-          <Text style={styles.subtitle}>Be one of them — a quick rating helps us grow.</Text>
+          <Text style={styles.subtitle}>Trusted by thousands to find the truth.</Text>
         </StaggerIn>
       </View>
 
