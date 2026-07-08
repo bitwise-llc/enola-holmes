@@ -25,35 +25,35 @@ export default function StatsScreen() {
       >
         <StaggerIn>
         <View style={styles.iconsRow}>
-          <Ionicons name="heart-outline" size={38} color="#1C1C1E" />
-          <Ionicons name="alert-circle-outline" size={38} color="#1C1C1E" />
-          <Ionicons name="shield-checkmark-outline" size={38} color="#1C1C1E" />
+          <Ionicons name="search-outline" size={38} color="#1C1C1E" />
+          <Ionicons name="images-outline" size={38} color="#1C1C1E" />
+          <Ionicons name="globe-outline" size={38} color="#1C1C1E" />
         </View>
 
-        <Text style={styles.mainTitle}>The Reality of Online Dating</Text>
+        <Text style={styles.mainTitle}>The Power of Image Search</Text>
 
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>1 in 3</Text>
+          <Text style={styles.statNumber}>100B+</Text>
           <Text style={styles.statDescription}>
-            people have met someone online who wasn't who they claimed to be.
+            images are indexed across the public web, ready to be matched to a photo.
           </Text>
-          <Text style={styles.statSource}>~ Pew Research Center</Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>53%</Text>
-          <Text style={styles.statDescription}>
-            of online daters admit to lying on their profiles about age, appearance, or relationship status.
-          </Text>
-          <Text style={styles.statSource}>~ Journal of Communication</Text>
+          <Text style={styles.statSource}>~ Web Data Commons</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>63%</Text>
+          <Text style={styles.statNumber}>Seconds</Text>
           <Text style={styles.statDescription}>
-            of users don't research their dates before meeting them in person.
+            to trace where a photo appears online and find visually similar images.
           </Text>
-          <Text style={styles.statSource}>~ Social Catfish Survey</Text>
+          <Text style={styles.statSource}>~ Enola</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>1 photo</Text>
+          <Text style={styles.statDescription}>
+            is all it takes to discover an image's source and every page it shows up on.
+          </Text>
+          <Text style={styles.statSource}>~ Enola</Text>
         </View>
         </StaggerIn>
       </ScrollView>

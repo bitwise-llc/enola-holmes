@@ -28,11 +28,11 @@ import Animated, {
 
 const REVIEWS = [
   { text: 'finally found the information I needed. this app is amazing', author: 'Sarah M.' },
-  { text: 'dodged a total catfish thanks to Enola. worth every penny', author: 'Jessica R.' },
+  { text: 'found the original source of a photo in seconds. so useful', author: 'Jessica R.' },
   { text: 'super easy to use and the results were spot on', author: 'Megan T.' },
-  { text: 'gave me peace of mind before meeting someone new', author: 'Ashley K.' },
+  { text: 'tracked down where an image came from instantly', author: 'Ashley K.' },
   { text: 'wish I had this years ago. genuinely a lifesaver', author: 'Emily D.' },
-  { text: 'caught my match lying about their whole profile', author: 'Olivia P.' },
+  { text: 'showed me every site a picture appeared on', author: 'Olivia P.' },
   { text: 'fast, private, and it actually works', author: 'Rachel B.' },
 ];
 

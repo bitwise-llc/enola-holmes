@@ -148,8 +148,8 @@ export default function HomeScreen() {
         </HapticTouchable>
 
         <Text style={styles.disclosureText}>
-          The photo you choose is sent to a third-party face-search service to look for
-          matching public profiles. See our{' '}
+          The photo you choose is sent to a third-party reverse-image-search service to look for
+          matching and visually similar images across public web content. See our{' '}
           <Text
             style={styles.disclosureLink}
             onPress={() => Linking.openURL(LEGAL_URLS.privacy).catch(() => {})}

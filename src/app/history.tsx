@@ -119,7 +119,7 @@ export default function HistoryScreen() {
                   resizeMode="cover"
                 />
                 <View style={styles.historyInfo}>
-                  <Text style={styles.historyTitle}>Face Search</Text>
+                  <Text style={styles.historyTitle}>Image Search</Text>
                   <Text style={styles.historyDate}>{formatDate(search.created_at)}</Text>
                   <View style={styles.resultsBadge}>
                     <Text style={styles.resultsText}>

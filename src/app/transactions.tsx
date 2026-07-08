@@ -8,7 +8,7 @@ import { useCoinTransactions } from '@/utils/useRealtime';
 
 // Human labels for the `reason` codes written by the coin RPCs.
 const LABELS: Record<string, string> = {
-  scan: 'Face Search',
+  scan: 'Image Search',
   scan_refund: 'Search Refund',
   purchase: 'Coin Purchase',
   refund: 'Refund',
